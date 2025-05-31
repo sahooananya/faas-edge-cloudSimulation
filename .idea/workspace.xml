@@ -4,21 +4,15 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="21757a6c-68d3-4887-8a5b-3941046bff0d" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/faas-edge-cloud-sim.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/edge_network.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/models.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/parser.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/scheduler.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/simulator.py" afterDir="false" />
+    <list default="true" id="21757a6c-68d3-4887-8a5b-3941046bff0d" name="Changes" comment="completed">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_avg_edge_utilization.png" beforeDir="false" afterPath="$PROJECT_DIR$/logs/policy_comparison_avg_edge_utilization.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_cold_starts.png" beforeDir="false" afterPath="$PROJECT_DIR$/logs/policy_comparison_cold_starts.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_edge_ratio.png" beforeDir="false" afterPath="$PROJECT_DIR$/logs/policy_comparison_edge_ratio.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/scheduler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/simulator.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -35,9 +29,9 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 6
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 6
+}</component>
   <component name="ProjectId" id="2xg0BUKytmChIyM2l1ckFqMg6tU" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -51,7 +45,8 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "master"
+    "git-widget-placeholder": "master",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
   }
 }]]></component>
   <component name="RecentsManager">
@@ -74,7 +69,40 @@
       <option name="presentableId" value="Default" />
       <updated>1748344274225</updated>
     </task>
+    <task id="LOCAL-00001" summary="phase 1 completed">
+      <option name="closed" value="true" />
+      <created>1748414827195</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1748414827195</updated>
+    </task>
+    <task id="LOCAL-00002" summary="completed">
+      <option name="closed" value="true" />
+      <created>1748671055969</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1748671055969</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="phase 1 completed" />
+    <MESSAGE value="completed" />
+    <option name="LAST_COMMIT_MESSAGE" value="completed" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

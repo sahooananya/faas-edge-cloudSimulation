@@ -1,8 +1,8 @@
 # src/scheduler.py
 
 import heapq
-from typing import Dict, Any, Set  # <--- ADD Dict and Set here
-import collections  # <--- ADD collections for defaultdict
+from typing import Dict, Any, Set
+import collections
 
 from .models import Task, EdgeNode, Cloud, Workflow
 from .cache_manager import CacheManager
@@ -35,12 +35,18 @@ class Scheduler:
         return self.ready_task_queue[0]
 
     def find_best_execution_option(self, task: Task, current_time: float):
+        """
+        Evaluates the best node (edge or cloud) for a given task,
+        considering primary edge, then neighbors, and finally cloud.
+        Returns the assigned node, node type, cold start cost, wait time, and estimated completion time.
+        """
         best_node = None
         best_node_type = None
         min_completion_time = float('inf')
         cold_start_incurred = 0.0
         calculated_wait_time = 0.0
 
+        # Determine a preferred edge node for the task (simple heuristic, e.g., based on task ID)
         primary_edge_id = hash(task.id) % self.edge_network.num_edge_nodes
         primary_edge = self.edge_network.get_edge_node_by_id(primary_edge_id)
 
@@ -51,10 +57,12 @@ class Scheduler:
                 if neighbor.id != primary_edge.id and neighbor not in edges_to_evaluate:
                     edges_to_evaluate.append(neighbor)
 
+        # Add all other nodes to ensure all options are considered if primary/neighbors are very busy
         for node in self.edge_network.get_all_edge_nodes():
             if node not in edges_to_evaluate:
                 edges_to_evaluate.append(node)
 
+        # 1. Evaluate Edge Nodes
         for edge_node in edges_to_evaluate:
             current_node_available_time = self.edge_node_available_time[edge_node.id]
 
@@ -62,6 +70,7 @@ class Scheduler:
             if not self.cache_manager.is_cached(edge_node.id, task.function_id):
                 cold_start_cost = self.cold_start_penalty
 
+            # Estimated start time on edge node = max(current_sim_time, node_becomes_free) + dispatch_latency + cold_start
             estimated_start_time_at_node = max(current_time,
                                                current_node_available_time) + self.edge_network.base_latency + cold_start_cost
             estimated_completion_time = estimated_start_time_at_node + task.runtime
@@ -73,15 +82,24 @@ class Scheduler:
                 cold_start_incurred = cold_start_cost
                 calculated_wait_time = max(0.0, current_node_available_time - current_time)
 
-        cloud_est_completion_time = current_time + self.cloud.latency + task.runtime
+        # 2. Evaluate Cloud
+        # Add a significant additional penalty for cloud execution to discourage it
+        # This makes edge nodes more appealing even if they have some queue.
+        # Adjust this value based on how much you want to prioritize edge.
+        # A value like 5000ms (5 seconds) or 10000ms (10 seconds) can heavily discourage cloud.
+        CLOUD_DISCOURAGEMENT_PENALTY = 0.0  # 100 seconds of penalty
 
+        cloud_est_completion_time = current_time + self.cloud.latency + task.runtime + CLOUD_DISCOURAGEMENT_PENALTY
+
+        # If the cloud is still better despite the penalty, or if no edge node was found
         if best_node is None or cloud_est_completion_time < min_completion_time:
             min_completion_time = cloud_est_completion_time
             best_node = self.cloud
             best_node_type = "cloud"
-            cold_start_incurred = 0.0
-            calculated_wait_time = 0.0
+            cold_start_incurred = 0.0  # Cloud usually assumes no cold starts for FaaS
+            calculated_wait_time = 0.0  # Cloud is usually considered infinitely available / no queue
 
+        # If the best option is now edge, update cache status
         if best_node_type == "edge":
             self.cache_manager.access_function(best_node.id, task.function_id)
 

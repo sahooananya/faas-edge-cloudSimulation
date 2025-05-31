@@ -159,7 +159,12 @@ class Simulator:
 
         while self.event_queue and self.current_time <= SIMULATION_DURATION:
             event_time, event_type, data = heapq.heappop(self.event_queue)
+            if event_time > self.current_time:
+                # print(f"Time advanced from {self.current_time:.2f} to {event_time:.2f}")
+                pass  # This indicates time is progressing
             self.current_time = max(self.current_time, event_time)
+            # print(f"Processing event: {event_type} at {self.current_time:.2f}") # Also useful for deep debug
+
 
             if event_type == "workflow_submit":
                 workflow_id = data
