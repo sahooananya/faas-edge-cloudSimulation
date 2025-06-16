@@ -7,6 +7,7 @@ from src.config import (
     ADJACENCY_MATRIX, PUBLIC_CACHE_FRACTION, SCHEDULING_POLICY,
     SIMULATION_DURATION
 )
+# Assuming a 'results' directory with a 'plotting.py' exists for plot generation
 from src.results import plotting
 
 policy_combinations = [
@@ -53,5 +54,6 @@ for sched_policy, cache_policy in policy_combinations:
 
 # Generate comparison plots
 print("\n=== Generating Final Comparison Plots ===")
+# This assumes plotting.py has a function plot_comparison_results that takes the aggregated results
 plotting.plot_comparison_results(comparison_results)
 print("Comparison plots generated in the 'results' directory.")

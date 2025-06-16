@@ -1,0 +1,7 @@
+Policy,Total Workflows Completed,Workflows Completed On Time,Tasks On Edge,Tasks On Cloud,Total Cold Starts,Avg Edge Utilization (%)
+EDF_full_public,33,33,1700,75,6,0.99
+EDF_partial_public_private,34,34,1745,94,1749,0.99
+EDF_full_private,34,34,1745,94,1749,0.99
+CriticalPathFirst_full_public,33,33,1700,75,6,0.99
+CriticalPathFirst_partial_public_private,34,34,1745,94,1749,0.99
+CriticalPathFirst_full_private,34,34,1745,94,1749,0.99

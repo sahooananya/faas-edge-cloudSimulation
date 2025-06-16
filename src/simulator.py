@@ -1,3 +1,4 @@
+
 import csv
 import heapq
 import os
@@ -44,12 +45,11 @@ class Simulator:
         self.cache_sharing_policy = cache_sharing_policy
         self.public_cache_fraction = public_cache_fraction
 
-        # Initialize EdgeNodes with capacity and cache_size from config
-        # This will be done in EdgeNetwork constructor based on current EdgeNode in models.py
         self.edge_network = EdgeNetwork(num_edge_nodes, edge_latency, adjacency_matrix)
-        for node in self.edge_network.edge_nodes:  # Initialize individual node cache sizes
-            node.cache_size = self.cache_size  # Ensure EdgeNode's cache_size is set
-            node.capacity = 1  # Assuming capacity 1 for now, can be a config param
+        # Ensure EdgeNodes are initialized with proper capacity and cache_size
+        for node in self.edge_network.edge_nodes:  # Iterate over actual EdgeNode objects
+            node.capacity = 1  # Assuming capacity 1 for now; you might want to make this configurable
+            node.cache_size = self.cache_size
 
         self.cloud = Cloud(base_latency=self.cloud_latency)
         self.cache_manager = CacheManager(cache_size, num_edge_nodes, "LRU", cache_sharing_policy,
@@ -72,7 +72,7 @@ class Simulator:
         self.last_utilization_record_time = 0.0  # To track when last utilization was recorded
 
         self._load_workflow_templates()
-        self._schedule_initial_events()  # Replaced _generate_workflow_submission_events directly enqueueing events
+        self._schedule_initial_events()
 
         print(
             f"Simulator initialized with scheduling policy: {self.scheduling_policy} and cache policy: {self.cache_sharing_policy}")
@@ -121,7 +121,6 @@ class Simulator:
             return
 
         # Generate a unique ID for this workflow instance
-        # Combine template ID, current time, and a random number to ensure uniqueness
         workflow_instance_id = f"{workflow_template.id}_inst_{int(self.current_time)}_{random.randint(0, 9999)}"
 
         # Create a new instance of the workflow template
@@ -149,6 +148,7 @@ class Simulator:
             return
 
         # Update global stats
+        # Cold start penalty is added when task is assigned, not completed
         self.global_cold_starts += 1 if task.cold_start_penalty > 0 else 0
         if task.assigned_node_type == "edge":
             self.global_tasks_on_edge += 1
@@ -167,11 +167,10 @@ class Simulator:
         workflow_instance.mark_task_completed(task.id)
 
         # Schedule newly ready dependent tasks
-        for next_task in workflow_instance.get_successors(task.id):  # get_successors returns Task objects
-            # Check if all dependencies of the successor task are now met
+        for next_task in workflow_instance.get_successors(task.id):
             all_deps_met = all(dep_id in workflow_instance.completed_tasks for dep_id in next_task.dependencies)
 
-            if all_deps_met and next_task.start_time is None:  # Only add if not already started/ready
+            if all_deps_met and next_task.start_time is None:
                 next_task.ready_time = self.current_time  # Set ready time
                 self.scheduler.add_ready_task(next_task)
 
@@ -196,14 +195,15 @@ class Simulator:
     def _record_edge_utilization(self):
         """Records the busy/idle status of each edge node at the current time."""
         for node in self.edge_network.get_all_edge_nodes():
-            # is_busy now checks if node is at capacity using current_time to clean old tasks
+            # Check if the node is at its full capacity at this current_time point
+            # `is_busy` in EdgeNode now checks `get_current_load` which purges old tasks
             is_busy = 1 if node.is_busy(self.current_time) else 0
             self.global_edge_utilization[node.id].append(is_busy)
 
     def run_simulation(self):
         """Runs the main simulation loop."""
         start_time_real = time.time()
-        print(f"Starting simulation for {SIMULATION_DURATION / 1000 / 60:.2f} minutes...")  # Display in minutes
+        print(f"Starting simulation for {SIMULATION_DURATION / 1000 / 60:.2f} minutes...")
 
         # Initial prefetch based on all available function IDs
         all_function_ids = list(self.parser.functions_catalog.keys())
@@ -236,15 +236,17 @@ class Simulator:
             elif event_type == "simulation_end":
                 print(
                     f"Simulation ended at {self.current_time / 1000:.2f} seconds ({self.current_time / 1000 / 60:.2f} minutes).")
-                break  # End simulation loop
+                break
 
-            # After processing any event (which might make new tasks ready or nodes free),
+                # After processing any event (which might make new tasks ready or nodes free),
             # always attempt to schedule tasks immediately.
-            scheduled_tasks = self.scheduler.schedule_tasks(self.current_time,
-                                                            self.workflow_stats)  # Pass workflow_stats
+            # This loop ensures that all tasks that became ready *at or before* current_time
+            # are given a chance to be scheduled.
+            # `scheduled_tasks` will contain tasks that the scheduler decided to run.
+            scheduled_tasks = self.scheduler.schedule_tasks(self.current_time, self.workflow_stats)
             for task, assigned_node, assigned_node_type, cold_start_penalty, wait_time in scheduled_tasks:
-                task.start_time = self.current_time + wait_time  # Actual start time after queueing and cold start
-                task.end_time = task.start_time + task.runtime  # End time is just start + runtime (cold start is included in wait_time already)
+                task.start_time = self.current_time + wait_time
+                task.end_time = task.start_time + task.runtime  # Cold start penalty is already factored into wait_time by scheduler
                 task.assigned_node = assigned_node
                 task.assigned_node_type = assigned_node_type
                 task.cold_start_penalty = cold_start_penalty  # This is the cold start penalty actually incurred
@@ -254,6 +256,8 @@ class Simulator:
                 self._add_event(task.end_time, "task_completion", task)
 
         # Ensure final utilization record up to the simulation's end time
+        # This loop might run multiple times if simulation_end event was very far,
+        # ensuring all intervals are covered.
         while self.last_utilization_record_time + PREDICTION_INTERVAL <= self.current_time:
             self._record_edge_utilization()
             self.last_utilization_record_time += PREDICTION_INTERVAL
@@ -279,14 +283,14 @@ class Simulator:
                       tasks_on_edge: int, tasks_on_cloud: int, cold_starts: int,
                       edge_utilization_data: Dict[int, List[int]],
                       workflow_stats: List[WorkflowStats]):
-        """Saves simulation results to CSV files and prints to console."""
+        """Save simulation results to CSV files and prints to console."""
         results_dir = "results"
         os.makedirs(results_dir, exist_ok=True)
 
         summary_file = os.path.join(results_dir, "simulation_summary.csv")
         per_workflow_file = os.path.join(results_dir, "per_workflow_stats.csv")
 
-        # Calculate average edge utilization from raw data (0 or 1 per interval)
+        # Calculate average edge utilization from raw data (0 or 1 per interval per node)
         total_busy_intervals = 0
         total_intervals_recorded = 0
         for node_id, util_list in edge_utilization_data.items():
@@ -297,14 +301,14 @@ class Simulator:
                                           total_busy_intervals / total_intervals_recorded) * 100 if total_intervals_recorded > 0 else 0.0
 
         # Print global statistics to console
-        print(f"\n=== Simulation Results ({policy_name}) ===")  # Updated header
+        print(f"\n=== Simulation Results ({policy_name}) ===")
         print(f"Total Workflows Submitted: {total_workflows_submitted}")
         print(f"Total Workflows Completed: {total_workflows_completed}")
         print(f"Workflows Completed On Time: {workflows_completed_on_time}")
         print(f"Tasks Executed on Edge: {tasks_on_edge}")
         print(f"Tasks Executed on Cloud: {tasks_on_cloud}")
         print(f"Total Cold Starts: {cold_starts}")
-        print(f"Average Edge Utilization: {avg_util_percentage:.2f}%")
+        'print(f"Average Edge Utilization: {avg_util_percentage:.2f}%")'
         print("------------------------------------------")
 
         # Save to simulation_summary.csv
@@ -332,4 +336,3 @@ class Simulator:
                                  stat.workflow_completed_within_deadline])
 
         print(f"Results saved to {summary_file} and {per_workflow_file}")
-

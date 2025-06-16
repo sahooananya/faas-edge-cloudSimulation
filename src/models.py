@@ -48,54 +48,53 @@ class EdgeNode:
     def __init__(self, id, capacity: int = 1, cache_size: int = 5):
         self.id = id
         self.capacity = capacity  # Number of concurrent tasks it can execute
-        # Stores the finish time of each task currently occupying a slot
-        self.active_slots_finish_times: List[float] = []
+        # Stores the finish time of tasks occupying each slot. When a task finishes, its slot is free.
+        self.occupied_slots_finish_times: List[float] = []  # Stores end_time for each occupied slot
+
         # Cache for functions {function_id: True} - True indicates presence, OrderedDict for LRU
         self.function_cache: collections.OrderedDict[str, bool] = collections.OrderedDict()
         self.cache_size = cache_size  # Max number of functions to keep warm in its local cache
 
-    def get_earliest_available_slot_time(self, current_simulation_time: float) -> Optional[float]:
+    def get_earliest_available_slot_time(self, current_simulation_time: float) -> float:
         """
-        Returns the earliest time when a slot becomes available on this node.
-        Also cleans up completed tasks from active slots.
+        Returns the earliest time a slot becomes available on this node.
+        This also implicitly cleans up `occupied_slots_finish_times`.
         """
-        # Clean up tasks that have already finished
-        self.active_slots_finish_times = [
-            t_end for t_end in self.active_slots_finish_times if t_end > current_simulation_time
+        # Purge completed tasks from occupied slots
+        self.occupied_slots_finish_times = [
+            t_end for t_end in self.occupied_slots_finish_times if t_end > current_simulation_time
         ]
 
-        if len(self.active_slots_finish_times) < self.capacity:
+        if len(self.occupied_slots_finish_times) < self.capacity:
             # If there's an empty slot, it's available right now (from current_simulation_time)
             return current_simulation_time
         else:
             # All slots are busy, return the earliest time one of them finishes
-            # This is the time when the next task *could* potentially start
-            return min(self.active_slots_finish_times)
+            # We assume it's sorted or find the min. It's better to keep it sorted.
+            return min(self.occupied_slots_finish_times)
 
     def get_current_load(self, current_simulation_time: float) -> int:
         """Returns the number of functions currently being executed (occupying slots)."""
-        # Ensure active_slots_finish_times is up-to-date
-        self.active_slots_finish_times = [
-            t_end for t_end in self.active_slots_finish_times if t_end > current_simulation_time
+        # Ensure `occupied_slots_finish_times` is up-to-date with respect to current_simulation_time
+        self.occupied_slots_finish_times = [
+            t_end for t_end in self.occupied_slots_finish_times if t_end > current_simulation_time
         ]
-        return len(self.active_slots_finish_times)
+        return len(self.occupied_slots_finish_times)
 
     def is_busy(self, current_time: float) -> bool:
         """Checks if the node is busy at the current_time (i.e., at max capacity)."""
         return self.get_current_load(current_time) >= self.capacity
 
-    def assign_task(self, function_id: str, runtime: float, cold_start_penalty: float,
-                    current_simulation_time: float) -> tuple[float, float]:
+    def assign_task_to_slot(self, function_id: str, task_end_time: float):
         """
-        Assigns a function execution to this edge node. Updates its internal state.
-        Returns the actual start time of the task and the cold start penalty incurred.
+        Assigns a task to an available slot on this edge node.
+        This method is called by the scheduler AFTER it has determined start/end times.
+        It manages the node's internal state regarding occupied slots and function cache.
         """
-        # Determine when a slot is truly available to start this task
-        slot_available_at = self.get_earliest_available_slot_time(current_simulation_time)
-
-        # Determine cold start status and penalty
-        is_cold_start = function_id not in self.function_cache
-        actual_cold_start_incurred = cold_start_penalty if is_cold_start else 0.0
+        # Add the task's end time to mark a slot as occupied until then
+        self.occupied_slots_finish_times.append(task_end_time)
+        # Keep it sorted to easily find the next available slot time
+        self.occupied_slots_finish_times.sort()
 
         # Update the function cache (LRU logic)
         if function_id in self.function_cache:
@@ -103,41 +102,24 @@ class EdgeNode:
         else:
             if len(self.function_cache) >= self.cache_size:
                 self.function_cache.popitem(last=False)  # Evict LRU item
-            self.function_cache[function_id] = True  # Add new function
+            self.function_cache[function_id] = True  # Add new function to cache
 
-        # Calculate task's actual start and end times
-        # Task starts when the slot is free AND after the cold start delay
-        task_actual_start_time = slot_available_at + actual_cold_start_incurred
-        task_end_time = task_actual_start_time + runtime
-
-        # Mark this slot as busy until task_end_time
-        self.active_slots_finish_times.append(task_end_time)
-        self.active_slots_finish_times.sort()  # Keep sorted to easily find min for next slot
-
-        return task_actual_start_time, actual_cold_start_incurred
-
-    def release_task(self, task_id: str, task_end_time: float):
-        """
-        Releases a task from the node.
-        The cleanup of `active_slots_finish_times` is primarily handled by `get_earliest_available_slot_time`.
-        This method is a placeholder if more explicit task removal from slots becomes necessary.
-        """
-        pass
+    def is_cached(self, function_id: str) -> bool:
+        """Checks if a function is currently in the node's local cache."""
+        return function_id in self.function_cache
 
 
 class Cloud:
     """
-    Represents the central cloud, assumed to have effectively infinite capacity, but with latency.
+    Represents the central cloud. For simplicity, assume effectively infinite capacity
+    and a constant base latency for data transfer to/from it.
     """
 
     def __init__(self, base_latency: float):
         self.id = "cloud"
         self.base_latency = base_latency  # Latency for communicating with cloud
-        # In this model, Cloud is assumed to have infinite parallelism for processing,
-        # but there's a base_latency for the data/request to reach it.
-        # So, it's always "available" at current_simulation_time, but the task's effective start
-        # is after base_latency.
-        pass  # No need for available_time on cloud itself if it's truly infinite capacity
+        # In this simplified model, the cloud is always ready to receive new tasks.
+        pass
 
     def get_available_time(self, current_simulation_time: float) -> float:
         """
@@ -146,18 +128,12 @@ class Cloud:
         """
         return current_simulation_time
 
-    def assign_task(self, function_id: str, runtime: float, current_simulation_time: float) -> tuple[float, float]:
+    def assign_task_to_slot(self, function_id: str, task_end_time: float):
         """
-        Assigns a function execution to the cloud. Returns actual start time and cold start penalty.
-        Cloud typically does not have function-specific cold starts.
+        Placeholder method for Cloud, as it has infinite capacity.
+        The task is simply accepted.
         """
-        # Task effectively starts after communication latency to the cloud.
-        task_actual_start_time = current_simulation_time + self.base_latency
-
-        # Cloud does not incur cold start penalty per function in this model
-        incurred_cold_start = 0.0
-
-        return task_actual_start_time, incurred_cold_start
+        pass
 
 
 class Workflow:

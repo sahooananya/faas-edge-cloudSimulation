@@ -5,22 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="21757a6c-68d3-4887-8a5b-3941046bff0d" name="Changes" comment="completed">
-      <change afterPath="$PROJECT_DIR$/src/run_multiple.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/edge_cloud_task_ratio.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/edge_utilization.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_avg_edge_utilization.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_cold_starts.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_edge_ratio.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_workflow_completion.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/workflow_completion_status.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cache_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/cache_manager.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/edge_network.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/edge_network.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/models.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/results/plotting.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/results/plotting.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/run_multiple.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/run_multiple.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/scheduler.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/simulator.py" afterDir="false" />
     </list>
@@ -38,6 +26,9 @@
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$USER_HOME$/AppData/Local/Programs/Python/Python310/Lib/runpy.py" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 6
@@ -103,7 +94,15 @@
       <option name="project" value="LOCAL" />
       <updated>1748684087679</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="completed">
+      <option name="closed" value="true" />
+      <created>1750058399333</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1750058399333</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">

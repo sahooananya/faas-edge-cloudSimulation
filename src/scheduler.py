@@ -6,7 +6,7 @@ import random
 from .models import Task, EdgeNode, Cloud, Workflow, WorkflowStats  # Import WorkflowStats
 from .cache_manager import CacheManager
 from .edge_network import EdgeNetwork
-from .config import COLD_START_PENALTY, NUM_EDGE_NODES
+from .config import  NUM_EDGE_NODES
 
 
 class Scheduler:
@@ -44,7 +44,8 @@ class Scheduler:
                 return task
         return None
 
-    def schedule_tasks(self, current_time: float, workflow_stats: Dict[str, WorkflowStats]):  # Changed type hint
+    def schedule_tasks(self, current_time: float, workflow_stats: Dict[str, WorkflowStats]) -> List[
+        Tuple[Task, EdgeNode | Cloud, str, float, float]]:  # Changed type hint
         """
         Attempts to schedule ready tasks on appropriate nodes (edge or cloud).
         Returns a list of successfully scheduled tasks with their details.
@@ -64,7 +65,7 @@ class Scheduler:
             best_assigned_node = None
             best_node_type = None
             best_cold_start_incurred = 0.0
-            best_wait_time = 0.0  # Time task spends waiting for resource + cold start
+            best_wait_time = float('inf')  # Initialize with a very high value
             earliest_completion_time = float('inf')
 
             # --- 1. Evaluate Edge Nodes ---
@@ -72,16 +73,13 @@ class Scheduler:
                 # Get the earliest time a slot on this node becomes free for a new task
                 node_slot_available_time = node.get_earliest_available_slot_time(current_time)
 
-                # If the node has no available slots (shouldn't be None, but defensive)
-                if node_slot_available_time is None:
-                    continue
-
-                    # Check cache status for this function on this specific edge node
+                # Check cache status for this function on this specific edge node
                 is_cached = self.cache_manager.is_cached(node.id, task.function_id)
                 potential_cold_start = self.cold_start_penalty if not is_cached else 0.0
 
                 # Calculate potential start time on this edge node
-                # It's the later of when the task is ready and when a slot is available on the node, plus cold start
+                # It's the later of when the task is truly ready (ready_time) and when a slot is available on the node,
+                # plus the cold start penalty.
                 task_potential_start_on_edge = max(task.ready_time if task.ready_time is not None else current_time,
                                                    node_slot_available_time) + potential_cold_start
 
@@ -92,15 +90,16 @@ class Scheduler:
                     best_assigned_node = node
                     best_node_type = "edge"
                     best_cold_start_incurred = potential_cold_start
-                    # Wait time here is total delay from current_time until actual execution starts
+                    # Wait time is the duration from current_time until task_potential_start_on_edge
                     best_wait_time = task_potential_start_on_edge - current_time
 
             # --- 2. Evaluate Cloud ---
             # Cloud is assumed to have high capacity, so it's ready as soon as the task is ready
             # + base latency to send task to cloud.
-            cloud_available_time = self.cloud.get_available_time(current_time)
+            cloud_available_at_current_time = self.cloud.get_available_time(current_time)
+            # The actual start time on cloud includes the base_latency from sending the task.
             task_potential_start_on_cloud = max(task.ready_time if task.ready_time is not None else current_time,
-                                                cloud_available_time) + self.cloud.base_latency
+                                                cloud_available_at_current_time) + self.cloud.base_latency
             cloud_completion_time = task_potential_start_on_cloud + task.runtime
 
             if cloud_completion_time < earliest_completion_time:
@@ -112,23 +111,18 @@ class Scheduler:
 
             # --- Assign Task to the Best Node ---
             if best_assigned_node:
-                # If a node was chosen, "assign" the task to it.
-                # The actual task object state (start_time, end_time, assigned_node) will be set in simulator.py
-                # This call updates the node's internal state (e.g., available_time for Cloud, active_slots for EdgeNode)
+                # The node's internal state (e.g., occupied slots) needs to be updated.
+                # The assign_task_to_slot methods just record that the task will occupy the resource until `earliest_completion_time`.
+                best_assigned_node.assign_task_to_slot(task.function_id, earliest_completion_time)
+
+                # Update cache manager's LRU for this access
                 if best_node_type == "edge":
-                    actual_start_time, incurred_cold_start = best_assigned_node.assign_task(
-                        task.function_id, task.runtime, self.cold_start_penalty, current_time
-                    )
-                    # Update cache manager's LRU for this access
                     self.cache_manager.access_function(best_assigned_node.id, task.function_id)
-                else:  # cloud
-                    actual_start_time, incurred_cold_start = best_assigned_node.assign_task(
-                        task.function_id, task.runtime, current_time  # Cold start penalty is typically 0 for cloud
-                    )
+                # Cloud doesn't use the cache_manager in the same way.
 
                 # Append details to scheduled_tasks_info
                 scheduled_tasks_info.append(
-                    (task, best_assigned_node, best_node_type, incurred_cold_start, actual_start_time - current_time))
+                    (task, best_assigned_node, best_node_type, best_cold_start_incurred, best_wait_time))
             else:
                 # If for some reason no node was found (e.g., all busy and cloud also too slow, or some logic error)
                 # Re-queue the task for next iteration.
@@ -144,12 +138,9 @@ class Scheduler:
         """
         Performs initial prefetch of a fixed number of available functions
         to random edge caches.
-        The `all_function_ids` is a list of all unique function IDs available in the system.
         """
-        # Ensure we don't try to prefetch more functions than available or than cache can hold.
-        num_to_prefetch = min(5, len(all_function_ids))  # Prefetch max 5 functions, or fewer if not enough exist
+        num_to_prefetch = min(5, len(all_function_ids))
 
-        # Shuffle a copy of the list to pick 'random' functions for initial prefetch
         functions_to_prefetch = random.sample(all_function_ids, num_to_prefetch) if all_function_ids else []
 
         print(f"Scheduler: Performing initial prefetch of {len(functions_to_prefetch)} functions.")
@@ -157,7 +148,6 @@ class Scheduler:
         # Distribute these functions across edge nodes randomly
         for func_id in functions_to_prefetch:
             target_node_id = random.randint(0, NUM_EDGE_NODES - 1)
-            # Pass func_id as a list, as prefetch_functions expects a list of strings
             self.cache_manager.prefetch_functions(target_node_id, [func_id])
 
     def predictive_prefetch(self, active_workflows_stats: Dict[str, 'WorkflowStats'], current_time: float):
@@ -169,15 +159,13 @@ class Scheduler:
         critical_functions_per_node: Dict[int, Set[str]] = collections.defaultdict(set)
 
         for wf_stats in active_workflows_stats.values():
-            workflow = wf_stats.workflow_instance  # Get the actual Workflow object
+            workflow = wf_stats.workflow_instance
             if not workflow or not workflow.tasks:
                 continue
 
-            # Ensure dependency graph and critical path are computed for this workflow instance
-            # (they should be from template, but a check or recompute doesn't hurt)
             if not workflow.dependency_graph.nodes:
                 workflow._compute_dependencies_graph()
-            if not workflow.critical_path_tasks:
+            if not workflow.critical_path_tasks:  # Re-compute if empty (should be from template)
                 workflow._compute_critical_path()
 
             for task in workflow.tasks.values():
@@ -185,30 +173,22 @@ class Scheduler:
                     function_freq_counter[task.function_id] += 1
 
                     if task.on_critical_path:
-                        # Heuristic: Predict which node a critical task might run on.
-                        # Simple: hash task ID to a node ID. More advanced: use historical data or current load.
-                        predicted_node_id = hash(task.id) % self.edge_network.num_edge_nodes
+                        predicted_node_id = hash(task.id) % self.edge_network.num_edge_nodes  # Simple heuristic
 
-                        # Only prefetch if not already cached on that node
                         if not self.cache_manager.is_cached(predicted_node_id, task.function_id):
                             critical_functions_per_node[predicted_node_id].add(task.function_id)
 
-        # Prioritize top N most frequent functions across all active workflows
-        top_frequent_functions = [func for func, _ in function_freq_counter.most_common(10)]  # Top 10 most frequent
+        top_frequent_functions = [func for func, _ in function_freq_counter.most_common(10)]
 
-        # Now populate caches for critical functions and top frequent ones
         for node in self.edge_network.get_all_edge_nodes():
             node_id = node.id
             prefetch_list_for_node = []
 
-            # Add functions predicted to be critical for this specific node
             prefetch_list_for_node.extend(list(critical_functions_per_node[node_id]))
 
-            # Add globally popular functions that are not already in the critical list for this node's prefetch
             for f_id in top_frequent_functions:
                 if f_id not in prefetch_list_for_node and not self.cache_manager.is_cached(node_id, f_id):
                     prefetch_list_for_node.append(f_id)
 
-            # Perform prefetch using the CacheManager
             if prefetch_list_for_node:
                 self.cache_manager.prefetch_functions(node_id, prefetch_list_for_node)
