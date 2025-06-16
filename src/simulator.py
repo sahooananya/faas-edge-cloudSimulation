@@ -1,26 +1,24 @@
-# src/simulator.py
-
+import csv
 import heapq
-import time
-import random
 import os
-from .results import plotting
+import random
+import time
+from typing import Dict
+from typing import List
 
+from .cache_manager import CacheManager
 from .config import (
     NUM_EDGE_NODES, EDGE_CACHE_SIZE_PER_NODE, COLD_START_PENALTY,
     EDGE_TO_EDGE_LATENCY, CLOUD_TO_EDGE_LATENCY, PEGASUS_WORKFLOW_FILEPATHS,
     ADJACENCY_MATRIX, SCHEDULING_POLICY, CACHE_SHARING_POLICY,
-    SIMULATION_DURATION, RANDOM_SEED, PUBLIC_CACHE_FRACTION,
-    PREDICTION_INTERVAL,
-    # --- NEW IMPORTS FOR SCALING ---
+    SIMULATION_DURATION, RANDOM_SEED, PUBLIC_CACHE_FRACTION, PREDICTION_INTERVAL,
     MIN_WORKFLOW_SUBMISSION_INTERVAL, MAX_WORKFLOW_SUBMISSION_INTERVAL,
     TOTAL_WORKFLOW_SUBMISSIONS, WORKFLOW_SELECTION_PROBABILITY
-    # --- END NEW IMPORTS ---
 )
-from .models import Task, Workflow, EdgeNode, Cloud, WorkflowStats
-from .parser import PegasusWorkflowParser
-from .cache_manager import CacheManager
 from .edge_network import EdgeNetwork
+from .models import Task, Workflow, Cloud, WorkflowStats, EdgeNode
+from .parser import PegasusWorkflowParser
+from .results import plotting  # Although plotting is called in run_multiple, import here for completeness
 from .scheduler import Scheduler
 
 
@@ -31,354 +29,307 @@ class Simulator:
                  public_cache_fraction=0.0):
 
         random.seed(RANDOM_SEED)
-
         self.current_time = 0.0
-        self.event_queue = []  # Min-heap: (time, event_type, data)
+        self.event_queue = []
+        self._event_id_counter = 0  # Ensures unique event order for heapq ties
 
+        self.num_edge_nodes = num_edge_nodes
+        self.cache_size = cache_size
+        self.cold_start_penalty = cold_start_penalty
+        self.edge_latency = edge_latency
+        self.cloud_latency = cloud_latency
+        self.workflow_filepaths = workflow_filepaths
+        self.adjacency_matrix = adjacency_matrix
+        self.scheduling_policy = scheduling_policy
+        self.cache_sharing_policy = cache_sharing_policy
+        self.public_cache_fraction = public_cache_fraction
+
+        # Initialize EdgeNodes with capacity and cache_size from config
+        # This will be done in EdgeNetwork constructor based on current EdgeNode in models.py
         self.edge_network = EdgeNetwork(num_edge_nodes, edge_latency, adjacency_matrix)
-        self.cloud = Cloud(cloud_latency)
+        for node in self.edge_network.edge_nodes:  # Initialize individual node cache sizes
+            node.cache_size = self.cache_size  # Ensure EdgeNode's cache_size is set
+            node.capacity = 1  # Assuming capacity 1 for now, can be a config param
+
+        self.cloud = Cloud(base_latency=self.cloud_latency)
         self.cache_manager = CacheManager(cache_size, num_edge_nodes, "LRU", cache_sharing_policy,
                                           public_cache_fraction)
-        self.scheduler = Scheduler(self.edge_network, self.cloud, self.cache_manager, COLD_START_PENALTY,
+        self.scheduler = Scheduler(self.edge_network, self.cloud, self.cache_manager, cold_start_penalty,
                                    scheduling_policy)
+        self.parser = PegasusWorkflowParser()
 
-        self.workflow_parser = PegasusWorkflowParser()
+        self.workflow_templates: Dict[str, Workflow] = {}  # Stores parsed Workflow template objects
+        self.workflow_stats: Dict[str, WorkflowStats] = {}  # Stores WorkflowStats for each instance
 
-        # Reset workflow_parser's counter for each simulation run to ensure unique workflow IDs per run
-        self.workflow_parser.workflow_counter = 0
-
-        # Pre-parse all available workflow definitions once
-        self.available_workflow_definitions = self._pre_parse_workflow_definitions(workflow_filepaths)
-
-        self.workflows = []  # This will store actual submitted workflow instances
-        self.active_workflows = {}
-        self.completed_tasks_count = {}
-        self.total_tasks_in_workflow = {}
-
-        self.workflow_stats = {}  # Stores WorkflowStats objects for all completed workflows
+        # Global metrics for overall simulation summary
+        self.global_total_workflows_completed = 0
+        self.global_workflows_completed_on_time = 0
         self.global_tasks_on_edge = 0
         self.global_tasks_on_cloud = 0
         self.global_cold_starts = 0
-        self.global_workflows_completed_on_time = 0
-        self.global_total_workflows_completed = 0
-        self.global_edge_utilization = {i: 0.0 for i in range(num_edge_nodes)}
+        # Store utilization as a list of integers (0 for idle, 1 for busy) for each node at each recorded interval
+        self.global_edge_utilization: Dict[int, List[int]] = {i: [] for i in range(self.num_edge_nodes)}
+        self.last_utilization_record_time = 0.0  # To track when last utilization was recorded
 
-        # Initializing submission events for the dynamic scaling
-        self._initialize_workflow_submissions()
-        self._initialize_scheduling_events()  # For periodic prediction
+        self._load_workflow_templates()
+        self._schedule_initial_events()  # Replaced _generate_workflow_submission_events directly enqueueing events
 
-    def _pre_parse_workflow_definitions(self, filepaths):
-        """Parses all workflow XMLs once and stores them as templates."""
-        definitions = []
-        for filepath in filepaths:
-            # Parse but don't assign unique IDs or schedule yet
-            # Pass a dummy ID for initial parsing, actual unique IDs will be assigned on submission
-            workflow_template = self.workflow_parser.parse_workflow_template(filepath)
+        print(
+            f"Simulator initialized with scheduling policy: {self.scheduling_policy} and cache policy: {self.cache_sharing_policy}")
+
+    def _add_event(self, time: float, event_type: str, *args):
+        """Adds an event to the event queue."""
+        heapq.heappush(self.event_queue, (time, self._event_id_counter, event_type, args))
+        self._event_id_counter += 1
+
+    def _load_workflow_templates(self):
+        """Loads all workflow templates using the parser."""
+        for filepath in self.workflow_filepaths:
+            workflow_template = self.parser.parse_workflow_template(filepath)
             if workflow_template:
-                definitions.append(workflow_template)
-        if not definitions:
-            raise ValueError("No workflow definitions loaded. Check PEGASUS_WORKFLOW_FILEPATHS and XMLs.")
-        return definitions
-
-    def _initialize_workflow_submissions(self):
-        """
-        Schedules a total number of workflow submissions dynamically.
-        """
-        current_submission_time = 0.0
-        for i in range(TOTAL_WORKFLOW_SUBMISSIONS):
-            # Choose a workflow definition based on probability or uniformly
-            if WORKFLOW_SELECTION_PROBABILITY:
-                filepath = random.choices(
-                    list(WORKFLOW_SELECTION_PROBABILITY.keys()),
-                    weights=list(WORKFLOW_SELECTION_PROBABILITY.values()),
-                    k=1
-                )[0]
-                workflow_template = next(
-                    wt for wt in self.available_workflow_definitions if wt.source_filepath == filepath)
+                self.workflow_templates[workflow_template.name] = workflow_template
             else:
-                # Uniformly pick from available templates
-                workflow_template = random.choice(self.available_workflow_definitions)
+                print(f"Warning: Failed to load workflow template from {filepath}")
 
-            # Assign a unique ID for this specific submission instance
-            new_workflow_instance_id = f"{workflow_template.name.split('_')[0]}_{workflow_template.id.split('_')[1]}_{self.workflow_parser.workflow_counter}"
-            # Create a new workflow object for this instance
-            # We need a deep copy or re-parsing to ensure task states are fresh for each instance
-            # For simplicity, let's re-parse for each submission or create a 'clone' method in Workflow
-            # Re-parsing is safer but slower if many workflows are used.
-            # Let's clone (requires a clone method in Workflow and Task).
-            # If not cloning, each workflow instance needs its own fresh Task objects.
+    def _schedule_initial_events(self):
+        """Schedules initial workflow submissions and other periodic events."""
+        available_workflow_names = list(self.workflow_templates.keys())
+        if not available_workflow_names:
+            print("No workflow templates loaded. Cannot schedule submission events.")
+            return
 
-            # --- IMPORTANT: Re-parsing per instance for simplicity ---
-            # This is safer than deepcopy for nested objects and their states.
-            # If performance becomes an issue with many submissions, optimize this.
+        current_event_time = 0.0
+        for i in range(TOTAL_WORKFLOW_SUBMISSIONS):
+            workflow_name_to_submit = random.choice(available_workflow_names)
+            submission_interval = random.uniform(MIN_WORKFLOW_SUBMISSION_INTERVAL, MAX_WORKFLOW_SUBMISSION_INTERVAL)
+            current_event_time += submission_interval
+            self._add_event(current_event_time, "workflow_submission", workflow_name_to_submit)
 
-            # Since parse_workflow in parser.py assigns IDs dynamically,
-            # we just call it. But it needs the path.
-            # To avoid re-parsing the file: let's change workflow_parser to clone tasks.
-            # This will require changes in parser.py and models.py (Task.clone, Workflow.clone).
+        print(f"Generated {TOTAL_WORKFLOW_SUBMISSIONS} workflow submission events.")
 
-            # For immediate fix and Phase 3 Goal 4, let's simplify and make the simulator
-            # just pick a template and then clone the tasks from it.
-            # This requires a clone method in Workflow and Task.
+        # Schedule the first predictive prefetch event
+        self._add_event(PREDICTION_INTERVAL, "predictive_prefetch")
 
-            # Alternative for simplicity right now: Just re-parse if we don't have clone.
-            # Re-using workflow_parser for parsing instance
-            # New approach: the _pre_parse_workflow_definitions returns templates with generic IDs.
-            # When a new instance is created, we use a *fresh* parser call to get fresh tasks with unique IDs.
-            # This ensures unique Task/Workflow IDs.
-            workflow_instance = self.workflow_parser.parse_workflow(workflow_template.source_filepath)
+        # Add a final event to signify end of simulation
+        self._add_event(SIMULATION_DURATION + 1, "simulation_end")  # Ensure it runs past end if needed
 
-            if workflow_instance:
-                # Override the ID generated by parser with a truly unique one based on the submission count
-                workflow_instance.id = f"wf_inst_{self.workflow_parser.workflow_counter}"
-                # The workflow_parser.workflow_counter is already incremented in parse_workflow
-                # This ensures workflow_instance.id is unique and links to workflow_parser's counter.
+    def _process_workflow_submission(self, workflow_name: str):
+        """Processes a workflow submission event."""
+        workflow_template = self.workflow_templates.get(workflow_name)
+        if not workflow_template:
+            print(f"Error: Workflow template '{workflow_name}' not found for submission.")
+            return
 
-                # Each task also needs a unique ID based on its parent workflow instance
-                for task in workflow_instance.tasks.values():
-                    task.workflow_id = workflow_instance.id  # Ensure tasks link to the unique workflow instance ID
+        # Generate a unique ID for this workflow instance
+        # Combine template ID, current time, and a random number to ensure uniqueness
+        workflow_instance_id = f"{workflow_template.id}_inst_{int(self.current_time)}_{random.randint(0, 9999)}"
 
-                self.workflows.append(workflow_instance)  # Add to the list of all submitted instances
+        # Create a new instance of the workflow template
+        workflow_instance = workflow_template.create_instance(
+            new_id=workflow_instance_id,
+            current_simulation_time=self.current_time  # Pass submission time
+        )
 
-                current_submission_time += random.uniform(MIN_WORKFLOW_SUBMISSION_INTERVAL,
-                                                          MAX_WORKFLOW_SUBMISSION_INTERVAL)
-                heapq.heappush(self.event_queue, (current_submission_time, "workflow_submit", workflow_instance.id))
-                workflow_instance.submission_time = current_submission_time
-                # print(f"Scheduled Workflow '{workflow_instance.name}' (ID: {workflow_instance.id}) for submission at time {current_submission_time:.2f}")
+        # Store this instance's stats
+        self.workflow_stats[workflow_instance.id] = WorkflowStats(workflow_instance.id, workflow_instance.name,
+                                                                  workflow_instance.total_tasks)
+        # Link the workflow instance to its stats object
+        self.workflow_stats[workflow_instance.id].workflow_instance = workflow_instance
 
-    def _initialize_scheduling_events(self):
-        """
-        Schedules initial periodic prediction events.
-        """
-        heapq.heappush(self.event_queue, (self.current_time + PREDICTION_INTERVAL, "prediction_event", None))
+        # Add initial ready tasks to the scheduler
+        for task in workflow_instance.get_ready_tasks():
+            task.ready_time = self.current_time  # Set ready_time for the task
+            self.scheduler.add_ready_task(task)
+
+    def _process_task_completion(self, task: Task):
+        """Handles a task completion event."""
+        workflow_instance = task.workflow_instance  # Directly use the linked workflow instance
+        if not workflow_instance:
+            print(f"Error: Workflow instance not found for task {task.id}.")
+            return
+
+        # Update global stats
+        self.global_cold_starts += 1 if task.cold_start_penalty > 0 else 0
+        if task.assigned_node_type == "edge":
+            self.global_tasks_on_edge += 1
+        elif task.assigned_node_type == "cloud":
+            self.global_tasks_on_cloud += 1
+
+        # Update workflow-specific stats
+        self.workflow_stats[workflow_instance.id].add_task_execution_detail(
+            task.assigned_node_type,
+            task.end_time <= task.deadline,
+            task.wait_time,
+            task.cold_start_penalty
+        )
+
+        # Mark task as completed in the workflow instance
+        workflow_instance.mark_task_completed(task.id)
+
+        # Schedule newly ready dependent tasks
+        for next_task in workflow_instance.get_successors(task.id):  # get_successors returns Task objects
+            # Check if all dependencies of the successor task are now met
+            all_deps_met = all(dep_id in workflow_instance.completed_tasks for dep_id in next_task.dependencies)
+
+            if all_deps_met and next_task.start_time is None:  # Only add if not already started/ready
+                next_task.ready_time = self.current_time  # Set ready time
+                self.scheduler.add_ready_task(next_task)
+
+        # Check if the entire workflow is completed
+        if workflow_instance.is_completed():
+            self.global_total_workflows_completed += 1
+            workflow_instance.end_time = self.current_time  # Set workflow completion time
+
+            wf_stats_obj = self.workflow_stats.get(workflow_instance.id)
+            if wf_stats_obj:
+                wf_stats_obj.workflow_completed_within_deadline = workflow_instance.check_if_completed_within_deadline(
+                    self.current_time)
+                if wf_stats_obj.workflow_completed_within_deadline:
+                    self.global_workflows_completed_on_time += 1
+
+    def _process_predictive_prefetch(self):
+        """Triggers predictive caching in the scheduler."""
+        self.scheduler.predictive_prefetch(self.workflow_stats, self.current_time)
+        # Schedule the next prediction event
+        self._add_event(self.current_time + PREDICTION_INTERVAL, "predictive_prefetch")
+
+    def _record_edge_utilization(self):
+        """Records the busy/idle status of each edge node at the current time."""
+        for node in self.edge_network.get_all_edge_nodes():
+            # is_busy now checks if node is at capacity using current_time to clean old tasks
+            is_busy = 1 if node.is_busy(self.current_time) else 0
+            self.global_edge_utilization[node.id].append(is_busy)
 
     def run_simulation(self):
-        # ... (unchanged run_simulation logic) ...
-        # (Commented out prints for cleaner overall output)
-        sim_start_real_time = time.time()
+        """Runs the main simulation loop."""
+        start_time_real = time.time()
+        print(f"Starting simulation for {SIMULATION_DURATION / 1000 / 60:.2f} minutes...")  # Display in minutes
+
+        # Initial prefetch based on all available function IDs
+        all_function_ids = list(self.parser.functions_catalog.keys())
+        self.scheduler.initial_prefetch(all_function_ids)
+
+        self.last_utilization_record_time = 0.0  # Reset for each run_simulation call
 
         while self.event_queue and self.current_time <= SIMULATION_DURATION:
-            event_time, event_type, data = heapq.heappop(self.event_queue)
+            event_time, _, event_type, event_args = heapq.heappop(self.event_queue)
+
+            # Advance simulation time to the current event's time
             if event_time > self.current_time:
-                # print(f"Time advanced from {self.current_time:.2f} to {event_time:.2f}")
-                pass  # This indicates time is progressing
-            self.current_time = max(self.current_time, event_time)
-            # print(f"Processing event: {event_type} at {self.current_time:.2f}") # Also useful for deep debug
+                self.current_time = event_time
+                # Record utilization for all intervals passed since last record
+                while self.last_utilization_record_time + PREDICTION_INTERVAL <= self.current_time:
+                    self._record_edge_utilization()
+                    self.last_utilization_record_time += PREDICTION_INTERVAL
 
+            # Stop if current time exceeds simulation duration
+            if self.current_time > SIMULATION_DURATION:
+                break
 
-            if event_type == "workflow_submit":
-                workflow_id = data
-                workflow = next((wf for wf in self.workflows if wf.id == workflow_id), None)
-                if not workflow: continue
+            # Process the event
+            if event_type == "workflow_submission":
+                self._process_workflow_submission(*event_args)
+            elif event_type == "task_completion":
+                self._process_task_completion(*event_args)
+            elif event_type == "predictive_prefetch":
+                self._process_predictive_prefetch()
+            elif event_type == "simulation_end":
+                print(
+                    f"Simulation ended at {self.current_time / 1000:.2f} seconds ({self.current_time / 1000 / 60:.2f} minutes).")
+                break  # End simulation loop
 
-                # print(f"Time {self.current_time:.2f}: Workflow '{workflow.name}' (ID: {workflow.id}) submitted.")
-                self.active_workflows[workflow.id] = workflow
-                self.workflow_stats[workflow.id] = WorkflowStats(workflow.id, workflow.name)
-                self.workflow_stats[workflow.id].total_tasks = len(workflow.tasks)
-                self.completed_tasks_count[workflow.id] = 0
-                self.total_tasks_in_workflow[workflow.id] = len(workflow.tasks)
+            # After processing any event (which might make new tasks ready or nodes free),
+            # always attempt to schedule tasks immediately.
+            scheduled_tasks = self.scheduler.schedule_tasks(self.current_time,
+                                                            self.workflow_stats)  # Pass workflow_stats
+            for task, assigned_node, assigned_node_type, cold_start_penalty, wait_time in scheduled_tasks:
+                task.start_time = self.current_time + wait_time  # Actual start time after queueing and cold start
+                task.end_time = task.start_time + task.runtime  # End time is just start + runtime (cold start is included in wait_time already)
+                task.assigned_node = assigned_node
+                task.assigned_node_type = assigned_node_type
+                task.cold_start_penalty = cold_start_penalty  # This is the cold start penalty actually incurred
+                task.wait_time = wait_time  # This is the waiting time before execution starts
 
-                for task in workflow.tasks.values():
-                    if not task.dependencies:
-                        task.ready_time = self.current_time
-                        self.scheduler.add_ready_task(task)
+                # Schedule the completion event for this task
+                self._add_event(task.end_time, "task_completion", task)
 
-                heapq.heappush(self.event_queue, (self.current_time, "try_schedule", None))
+        # Ensure final utilization record up to the simulation's end time
+        while self.last_utilization_record_time + PREDICTION_INTERVAL <= self.current_time:
+            self._record_edge_utilization()
+            self.last_utilization_record_time += PREDICTION_INTERVAL
 
-            elif event_type == "task_ready":
-                task_id, workflow_id = data
-                workflow = self.active_workflows.get(workflow_id)
-                if not workflow: continue
-                task = workflow.tasks.get(task_id)
-                if not task or task.end_time is not None: continue
+        end_time_real = time.time()
+        print(f"Total simulation wall time: {end_time_real - start_time_real:.2f} seconds.")
 
-                task.ready_time = self.current_time
-                self.scheduler.add_ready_task(task)
-
-                heapq.heappush(self.event_queue, (self.current_time, "try_schedule", None))
-
-            elif event_type == "task_completed":
-                task_id, workflow_id = data
-                workflow = self.active_workflows.get(workflow_id)
-                if not workflow: continue
-                task = workflow.tasks.get(task_id)
-                if not task: continue
-
-                task_completed_on_time = (task.end_time <= task.deadline)
-                self.workflow_stats[workflow_id].add_task_execution_detail(
-                    task.assigned_node_type, task_completed_on_time, task.wait_time
-                )
-
-                if task.cold_start_penalty > 0:
-                    self.workflow_stats[workflow_id].increment_cold_starts()
-
-                self.completed_tasks_count[workflow_id] += 1
-
-                for successor_task in workflow.tasks.values():
-                    if task.id in successor_task.dependencies:
-                        successor_task.dependencies.remove(task.id)
-                        if not successor_task.dependencies and successor_task.end_time is None:
-                            heapq.heappush(self.event_queue,
-                                           (self.current_time, "task_ready", (successor_task.id, workflow.id)))
-
-                if self.completed_tasks_count[workflow_id] == self.total_tasks_in_workflow[workflow_id]:
-                    workflow.completion_time = self.current_time
-
-                    workflow_on_time = all(t.end_time <= t.deadline for t in workflow.tasks.values())
-                    if workflow_on_time:
-                        self.workflow_stats[workflow_id].workflow_completed_within_deadline = True
-                    else:
-                        self.workflow_stats[workflow_id].workflow_completed_within_deadline = False
-
-                    del self.active_workflows[workflow.id]
-                    del self.completed_tasks_count[workflow.id]
-                    del self.total_tasks_in_workflow[workflow.id]
-
-                heapq.heappush(self.event_queue, (self.current_time, "try_schedule", None))
-
-            elif event_type == "try_schedule":
-                while self.scheduler.ready_task_queue:
-                    if self.scheduler.scheduling_policy == "EDF":
-                        _deadline, _task_id_from_heap, current_task_to_schedule = self.scheduler.ready_task_queue[0]
-                    elif self.scheduler.scheduling_policy == "CriticalPathFirst":
-                        _priority_flag, _deadline, _task_id_from_heap, current_task_to_schedule = \
-                        self.scheduler.ready_task_queue[0]
-                    else:
-                        _deadline, _task_id_from_heap, current_task_to_schedule = self.scheduler.ready_task_queue[0]
-
-                    if current_task_to_schedule.workflow_id not in self.active_workflows or \
-                            current_task_to_schedule.end_time is not None:
-                        heapq.heappop(self.scheduler.ready_task_queue)
-                        continue
-
-                    chosen_node, chosen_node_type, cold_start_cost, wait_time, estimated_completion_time = \
-                        self.scheduler.find_best_execution_option(current_task_to_schedule, self.current_time)
-
-                    task_start_on_resource_time = max(self.current_time, \
-                                                      chosen_node.get_available_time() if chosen_node_type == "edge" else self.current_time)
-
-                    if task_start_on_resource_time > self.current_time:
-                        if self.scheduler.scheduling_policy == "EDF":
-                            heapq.heappush(self.scheduler.ready_task_queue,
-                                           (_deadline, _task_id_from_heap, current_task_to_schedule))
-                        elif self.scheduler.scheduling_policy == "CriticalPathFirst":
-                            heapq.heappush(self.scheduler.ready_task_queue,
-                                           (_priority_flag, _deadline, _task_id_from_heap, current_task_to_schedule))
-                        else:
-                            heapq.heappush(self.scheduler.ready_task_queue,
-                                           (_deadline, _task_id_from_heap, current_task_to_schedule))
-
-                        heapq.heappush(self.event_queue, (task_start_on_resource_time, "try_schedule", None))
-                        break
-
-                    heapq.heappop(self.scheduler.ready_task_queue)
-
-                    actual_task_execution_start_time = task_start_on_resource_time
-                    if chosen_node_type == "edge":
-                        actual_task_execution_start_time += self.edge_network.base_latency + cold_start_cost
-                    elif chosen_node_type == "cloud":
-                        actual_task_execution_start_time += self.cloud.latency
-
-                    current_task_to_schedule.start_time = actual_task_execution_start_time
-                    current_task_to_schedule.end_time = current_task_to_schedule.start_time + current_task_to_schedule.runtime
-
-                    self.scheduler.assign_task(current_task_to_schedule, chosen_node, chosen_node_type, cold_start_cost,
-                                               wait_time)
-                    self.scheduler.update_node_busy_time(chosen_node, current_task_to_schedule.end_time,
-                                                         chosen_node_type)
-
-                    heapq.heappush(self.event_queue, (current_task_to_schedule.end_time, "task_completed",
-                                                      (current_task_to_schedule.id,
-                                                       current_task_to_schedule.workflow_id)))
-
-                    if chosen_node_type == "edge":
-                        effective_busy_duration = current_task_to_schedule.runtime + cold_start_cost + self.edge_network.base_latency
-                        self.global_edge_utilization[chosen_node.id] += effective_busy_duration
-
-            elif event_type == "prediction_event":
-                if self.active_workflows:
-                    # Pass the active workflows dictionary to the scheduler
-                    self.scheduler.trigger_predictive_cache_load(self.active_workflows, self.current_time)
-
-                # Schedule the next prediction event if simulation is still within duration
-                if self.current_time + PREDICTION_INTERVAL <= SIMULATION_DURATION:
-                    heapq.heappush(self.event_queue,
-                                   (self.current_time + PREDICTION_INTERVAL, "prediction_event", None))
-
-        self.global_total_workflows_completed = len(self.workflow_stats)
-        self.global_workflows_completed_on_time = sum(
-            1 for ws in self.workflow_stats.values() if ws.workflow_completed_within_deadline)
-        self.global_tasks_on_edge = sum(ws.tasks_executed_on_edge for ws in self.workflow_stats.values())
-        self.global_tasks_on_cloud = sum(ws.tasks_executed_on_cloud for ws in self.workflow_stats.values())
-        self.global_cold_starts = sum(ws.cold_starts for ws in self.workflow_stats.values())
-
-        sim_end_real_time = time.time()
-
-    def print_global_stats(self):
-        """Prints overall simulation statistics for a single run."""
-        print(f"\n--- Global Simulation Statistics ---")
-        print(f"Total Workflows Completed: {self.global_total_workflows_completed}")
-        print(f"Workflows Completed On Time: {self.global_workflows_completed_on_time}")
-        print(
-            f"Percentage of Workflows Completed On Time: {(self.global_workflows_completed_on_time / self.global_total_workflows_completed * 100):.2f}%" if self.global_total_workflows_completed > 0 else "N/A")
-        print(f"Total Tasks Executed on Edge: {self.global_tasks_on_edge}")
-        print(f"Total Tasks Executed on Cloud: {self.global_tasks_on_cloud}")
-        print(f"Total Cold Starts (Overall): {self.global_cold_starts}")
-        print("------------------------------------")
-        print("Edge Node Utilization (Total Busy Time):")
-        for node_id, utilization in self.global_edge_utilization.items():
-            util_percent = (utilization / self.current_time) * 100 if self.current_time > 0 else 0.0
-            print(f"  Edge Node {node_id}: {utilization:.2f} time units ({util_percent:.2f}%)")
-        print("------------------------------------")
-
-
-if __name__ == "__main__":
-    if not os.path.exists('logs'):
-        os.makedirs('logs')
-
-    policies_to_test = ["full_private", "full_public", "partial_public_private"]
-
-    comparison_results = []
-
-    print(f"--- Starting Comparative Simulation Runs ---")
-    print(f"Scheduling Policy: {SCHEDULING_POLICY}")
-    print(f"Number of Edge Nodes: {NUM_EDGE_NODES}")
-    print(f"Edge Cache Size per Node: {EDGE_CACHE_SIZE_PER_NODE}")
-    print(f"Workflows to process: {TOTAL_WORKFLOW_SUBMISSIONS} instances across available types.")
-    print("-" * 40)
-
-    for policy_name in policies_to_test:
-        print(f"\n=== Running Simulation for Cache Sharing Policy: {policy_name} ===")
-
-        current_simulator = Simulator(
-            num_edge_nodes=NUM_EDGE_NODES,
-            cache_size=EDGE_CACHE_SIZE_PER_NODE,
-            cold_start_penalty=COLD_START_PENALTY,
-            edge_latency=EDGE_TO_EDGE_LATENCY,
-            cloud_latency=CLOUD_TO_EDGE_LATENCY,
-            workflow_filepaths=PEGASUS_WORKFLOW_FILEPATHS,
-            adjacency_matrix=ADJACENCY_MATRIX,
-            scheduling_policy=SCHEDULING_POLICY,
-            cache_sharing_policy=policy_name,
-            public_cache_fraction=PUBLIC_CACHE_FRACTION
+        # After simulation, save and print results
+        self._save_results(
+            policy_name=f"{self.scheduling_policy}_{self.cache_sharing_policy}",
+            total_workflows_submitted=TOTAL_WORKFLOW_SUBMISSIONS,
+            total_workflows_completed=self.global_total_workflows_completed,
+            workflows_completed_on_time=self.global_workflows_completed_on_time,
+            tasks_on_edge=self.global_tasks_on_edge,
+            tasks_on_cloud=self.global_tasks_on_cloud,
+            cold_starts=self.global_cold_starts,
+            edge_utilization_data=self.global_edge_utilization,
+            workflow_stats=list(self.workflow_stats.values())
         )
-        current_simulator.run_simulation()
 
-        results_for_policy = {
-            "policy_name": policy_name,
-            "total_workflows_completed": current_simulator.global_total_workflows_completed,
-            "workflows_completed_on_time": current_simulator.global_workflows_completed_on_time,
-            "tasks_on_edge": current_simulator.global_tasks_on_edge,
-            "tasks_on_cloud": current_simulator.global_tasks_on_cloud,
-            "total_cold_starts": current_simulator.global_cold_starts,
-            "total_simulation_time": current_simulator.current_time,
-            "edge_utilization_data": current_simulator.global_edge_utilization
-        }
-        comparison_results.append(results_for_policy)
-        current_simulator.print_global_stats()  # Print stats for this individual run
+    def _save_results(self, policy_name: str, total_workflows_submitted: int,
+                      total_workflows_completed: int, workflows_completed_on_time: int,
+                      tasks_on_edge: int, tasks_on_cloud: int, cold_starts: int,
+                      edge_utilization_data: Dict[int, List[int]],
+                      workflow_stats: List[WorkflowStats]):
+        """Saves simulation results to CSV files and prints to console."""
+        results_dir = "results"
+        os.makedirs(results_dir, exist_ok=True)
 
-    print("\n--- All Comparative Simulations Finished ---")
-    print("--- Generating Comparison Plots ---")
+        summary_file = os.path.join(results_dir, "simulation_summary.csv")
+        per_workflow_file = os.path.join(results_dir, "per_workflow_stats.csv")
 
-    plotting.plot_policy_comparison(comparison_results, NUM_EDGE_NODES)
-    print(f"Comparison plots saved to 'logs/' directory.")
+        # Calculate average edge utilization from raw data (0 or 1 per interval)
+        total_busy_intervals = 0
+        total_intervals_recorded = 0
+        for node_id, util_list in edge_utilization_data.items():
+            total_busy_intervals += sum(util_list)  # Sum of 1s (busy intervals)
+            total_intervals_recorded += len(util_list)  # Total intervals for this node
+
+        avg_util_percentage = (
+                                          total_busy_intervals / total_intervals_recorded) * 100 if total_intervals_recorded > 0 else 0.0
+
+        # Print global statistics to console
+        print(f"\n=== Simulation Results ({policy_name}) ===")  # Updated header
+        print(f"Total Workflows Submitted: {total_workflows_submitted}")
+        print(f"Total Workflows Completed: {total_workflows_completed}")
+        print(f"Workflows Completed On Time: {workflows_completed_on_time}")
+        print(f"Tasks Executed on Edge: {tasks_on_edge}")
+        print(f"Tasks Executed on Cloud: {tasks_on_cloud}")
+        print(f"Total Cold Starts: {cold_starts}")
+        print(f"Average Edge Utilization: {avg_util_percentage:.2f}%")
+        print("------------------------------------------")
+
+        # Save to simulation_summary.csv
+        with open(summary_file, "a", newline="") as f:
+            writer = csv.writer(f)
+            if f.tell() == 0:  # Write header only if file is empty
+                writer.writerow(["Policy", "Workflows Submitted", "Workflows Completed", "Workflows On Time",
+                                 "Tasks on Edge", "Tasks on Cloud", "Cold Starts", "Avg Edge Utilization (%)"])
+            writer.writerow(
+                [policy_name, total_workflows_submitted, total_workflows_completed, workflows_completed_on_time,
+                 tasks_on_edge, tasks_on_cloud, cold_starts, f"{avg_util_percentage:.2f}"])
+
+        # Save to per_workflow_stats.csv
+        with open(per_workflow_file, "a", newline="") as f:
+            writer = csv.writer(f)
+            if f.tell() == 0:
+                writer.writerow(["Policy", "Workflow ID", "Workflow Name", "Total Tasks", "Tasks On Time",
+                                 "Edge Tasks", "Cloud Tasks", "Cold Starts", "Avg Wait Time (ms)",
+                                 "Completed Within Deadline"])
+            for stat in workflow_stats:
+                writer.writerow([policy_name, stat.workflow_id, stat.workflow_name, stat.total_tasks,
+                                 stat.tasks_completed_within_deadline, stat.tasks_executed_on_edge,
+                                 stat.tasks_executed_on_cloud, stat.cold_starts,
+                                 f"{stat.get_average_wait_time():.2f}",
+                                 stat.workflow_completed_within_deadline])
+
+        print(f"Results saved to {summary_file} and {per_workflow_file}")
+

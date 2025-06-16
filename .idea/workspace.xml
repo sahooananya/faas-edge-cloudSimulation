@@ -5,12 +5,22 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="21757a6c-68d3-4887-8a5b-3941046bff0d" name="Changes" comment="completed">
+      <change afterPath="$PROJECT_DIR$/src/run_multiple.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_avg_edge_utilization.png" beforeDir="false" afterPath="$PROJECT_DIR$/logs/policy_comparison_avg_edge_utilization.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_cold_starts.png" beforeDir="false" afterPath="$PROJECT_DIR$/logs/policy_comparison_cold_starts.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_edge_ratio.png" beforeDir="false" afterPath="$PROJECT_DIR$/logs/policy_comparison_edge_ratio.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/edge_cloud_task_ratio.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/edge_utilization.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_avg_edge_utilization.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_cold_starts.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_edge_ratio.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/policy_comparison_workflow_completion.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/logs/workflow_completion_status.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cache_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/cache_manager.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/edge_network.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/edge_network.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/models.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/results/plotting.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/results/plotting.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/scheduler.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/simulator.py" afterDir="false" />
     </list>
@@ -37,18 +47,18 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.simulator.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "master",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.simulator.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="C:\Users\KIIT\PycharmProjects\faas-edge-cloud-sim\src new" />
@@ -85,7 +95,15 @@
       <option name="project" value="LOCAL" />
       <updated>1748671055969</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="completed">
+      <option name="closed" value="true" />
+      <created>1748684087679</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1748684087679</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">

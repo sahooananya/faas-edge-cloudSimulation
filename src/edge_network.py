@@ -40,10 +40,11 @@ class EdgeNetwork:
                 neighbors.append(self.graph.nodes[neighbor_id]['node_obj'])
         return neighbors
 
-    def get_edge_node_by_id(self, node_id: int):
-        if node_id in self.graph:
-            return self.graph.nodes[node_id]['node_obj']
-        return None
-
     def get_all_edge_nodes(self):
         return self.edge_nodes
+
+    def get_edge_node_by_id(self, node_id: int):
+        """Returns the EdgeNode object for a given ID."""
+        if 0 <= node_id < self.num_edge_nodes:
+            return self.edge_nodes[node_id]
+        return None

@@ -1,2 +1,6 @@
-networkx
-numpy
+### `requirements.txt` (New File)
+
+networkx==2.8.8
+matplotlib==3.5.3
+seaborn==0.12.2
+numpy==1.23.5

@@ -1,245 +1,119 @@
 import xml.etree.ElementTree as ET
 import os
-from .models import Workflow, Task, Function
 import networkx as nx
-
-# Import MS_PER_SECOND for consistent unit conversion
-from .config import MS_PER_SECOND, CLOUD_TO_EDGE_LATENCY, EDGE_TO_EDGE_LATENCY, COLD_START_PENALTY
+from typing import Dict, Set
+from .models import Task, Workflow, Function
+from .config import DEFAULT_FUNCTION_RUNTIME
 
 
 class PegasusWorkflowParser:
-    def __init__(self):
-        self.functions_catalog = {}
-        self.workflow_counter = 0
-        self.namespaces = {'dax': 'http://pegasus.isi.edu/schema/DAX'}
+    _workflow_counter = 0  # Class-level counter for unique workflow IDs for templates
 
-    def parse_workflow_template(self, xml_filepath):
+    def __init__(self):
+        self.namespaces = {'dax': 'http://pegasus.isi.edu/schema/DAX'}
+        self.functions_catalog: Dict[str, Function] = {}  # To store unique functions found
+
+    def parse_workflow_template(self, xml_filepath: str) -> Workflow:
+        """
+        Parses a Pegasus DAX XML file to create a Workflow template object.
+        """
         try:
             tree = ET.parse(xml_filepath)
             root = tree.getroot()
         except FileNotFoundError:
-            print(f"Error: XML file not found at {xml_filepath}")
+            print(f"Error: Workflow file not found at {xml_filepath}")
             return None
         except ET.ParseError as e:
             print(f"Error parsing XML file {xml_filepath}: {e}")
             return None
 
-        filename = os.path.basename(xml_filepath)
-        workflow_name_from_file = os.path.splitext(filename)[0]
+        workflow_name = root.attrib.get('name', os.path.basename(xml_filepath).replace('.dax', ''))
 
-        workflow_name_attr = root.attrib.get('name', workflow_name_from_file)
-        if workflow_name_attr == 'test' and 'jobCount' in root.attrib:
-            workflow_name = f"{workflow_name_from_file}_{root.attrib['jobCount']}"
-        else:
-            workflow_name = workflow_name_attr
+        # Generate a unique template ID for the workflow
+        PegasusWorkflowParser._workflow_counter += 1
+        template_workflow_id = f"wf_template_{PegasusWorkflowParser._workflow_counter}"
 
-        template_workflow_id = f"template_{workflow_name_from_file}"
+        tasks_for_template: Dict[str, Task] = {}
 
-        tasks_data = {}
+        # Collect job definitions (tasks) first to resolve dependencies easily
+        job_elements_by_id = {job_elem.attrib['id']: job_elem for job_elem in root.findall('dax:job', self.namespaces)}
 
-        for job_elem in root.findall('dax:job', self.namespaces):
-            task_id = job_elem.attrib.get('id')
-            task_name = job_elem.attrib.get('name')
-            # Convert runtime from seconds (XML) to milliseconds
-            runtime = float(job_elem.attrib.get('runtime', 0.0)) * MS_PER_SECOND
+        # Iterate through job elements to create Task objects
+        for job_id, job_elem in job_elements_by_id.items():
+            job_name = job_elem.attrib.get('name', job_id)
+            function_id = job_elem.attrib.get('name', job_id)  # Function ID is often the job name in DAX
 
-            if not task_id:
-                print(f"Warning: Skipping job without 'id' attribute: {ET.tostring(job_elem, encoding='unicode')}")
-                continue
-            if not task_name:
-                task_name = task_id
+            # Determine runtime (from file or default)
+            runtime_str = job_elem.find(".//dax:uses[type='executable']", self.namespaces)
+            runtime = float(runtime_str.attrib.get('runtime',
+                                                   str(DEFAULT_FUNCTION_RUNTIME))) if runtime_str is not None else DEFAULT_FUNCTION_RUNTIME
 
-            if runtime <= 0.0:
-                runtime = 1.0  # Ensure minimum runtime for calculations
+            # Add/update function in catalog
+            if function_id not in self.functions_catalog:
+                self.functions_catalog[function_id] = Function(function_id, function_id, runtime)
+            else:
+                self.functions_catalog[function_id].runtime = runtime  # Update runtime if different in DAX
 
-            function_name = task_name
+            # Create Task object with a placeholder deadline for the template
+            task_obj = Task(
+                id=job_id,
+                name=job_name,
+                function_id=function_id,
+                runtime=runtime,
+                deadline=float('inf'),  # Placeholder for template, instance will have specific deadline
+                dependencies=set(),
+                workflow_id=template_workflow_id  # Link to template ID initially
+            )
+            tasks_for_template[job_id] = task_obj
 
-            if function_name not in self.functions_catalog:
-                self.functions_catalog[function_name] = Function(function_name, function_name, runtime)
-
-            tasks_data[task_id] = {
-                'id': task_id, 'name': task_name, 'function_id': function_name,
-                'runtime': runtime, 'dependencies': set()
-            }
-
-        if not tasks_data:
-            workflow = Workflow(template_workflow_id, workflow_name, [], float('inf'), source_filepath=xml_filepath)
-            workflow._compute_critical_path()
-            return workflow
-
+        # Parse dependencies after all tasks are created
         for child_elem in root.findall('dax:child', self.namespaces):
-            child_id = child_elem.attrib.get('ref')
-            if not child_id or child_id not in tasks_data: continue
-            for parent_elem in child_elem.findall('dax:parent', self.namespaces):
-                parent_id = parent_elem.attrib.get('ref')
-                if not parent_id or parent_id not in tasks_data: continue
-                tasks_data[child_id]['dependencies'].add(parent_id)
+            child_id = child_elem.attrib['ref']
+            if child_id in tasks_for_template:
+                for parent_elem in child_elem.findall('dax:parent', self.namespaces):
+                    parent_id = parent_elem.attrib['ref']
+                    if parent_id in tasks_for_template:
+                        tasks_for_template[child_id].dependencies.add(parent_id)
 
-        tasks = []
-        for task_id, data in tasks_data.items():
-            # Initial task deadline, in ms, based on its converted runtime
-            task_deadline = data['runtime'] * 2.0 + 100.0  # Example: 2x runtime + 100ms buffer
+        # Calculate an overall initial deadline for the workflow template based on its ideal makespan
+        # Temporarily create a dummy workflow instance to compute critical path makespan
+        # This allows using the Workflow's own critical path calculation logic
+        # Note: The ID here is temporary, as this is just for template analysis.
+        temp_workflow_for_makespan = Workflow("temp_wf_id", "temp_wf_name", tasks_for_template, float('inf'))
 
-            tasks.append(Task(
-                id=data['id'], name=data['name'], function_id=data['function_id'],
-                runtime=data['runtime'], deadline=task_deadline,
-                dependencies=data['dependencies'], workflow_id=template_workflow_id
-            ))
-        tasks.sort(key=lambda t: t.id)
+        ideal_makespan = 0.0
+        if temp_workflow_for_makespan.dependency_graph.nodes:
+            # Recalculate EST/LFT to find overall makespan based on runtime only
+            est_temp = {node: 0.0 for node in temp_workflow_for_makespan.dependency_graph.nodes}
+            try:
+                topo_order_temp = list(nx.topological_sort(temp_workflow_for_makespan.dependency_graph))
+            except nx.NetworkXNoCycle:
+                topo_order_temp = []
 
-        workflow_template = Workflow(template_workflow_id, workflow_name, tasks, float('inf'),
-                                     source_filepath=xml_filepath)
-        workflow_template._compute_critical_path()  # Compute EST, EFT for template tasks (in ms)
+            for u_id in topo_order_temp:
+                u_task = temp_workflow_for_makespan.tasks[u_id]
+                for v_id in temp_workflow_for_makespan.dependency_graph.successors(u_id):
+                    est_temp[v_id] = max(est_temp[v_id], est_temp[u_id] + u_task.runtime)
+
+            for node_id, task in temp_workflow_for_makespan.tasks.items():
+                ideal_makespan = max(ideal_makespan, est_temp[node_id] + task.runtime)
+
+        # Set the initial deadline as a multiple of the ideal makespan
+        # A factor like 1.5x or 2.0x is common to allow for some slack.
+        # If ideal_makespan is 0 (e.g., single task workflow), use a reasonable default.
+        deadline_slack_factor = 2.0  # Can be moved to config.py
+        calculated_workflow_template_deadline = ideal_makespan * deadline_slack_factor if ideal_makespan > 0 else 10000.0  # Default in ms
+
+        print(f"Parsed Workflow Template '{workflow_name}' (ID: {template_workflow_id}):")
+        print(f"  Min Ideal Makespan: {ideal_makespan:.2f} ms")
+        print(f"  Calculated Deadline (Template): {calculated_workflow_template_deadline:.2f} ms")
+
+        workflow_template = Workflow(
+            template_workflow_id,
+            workflow_name,
+            tasks_for_template,
+            calculated_workflow_template_deadline,
+            source_filepath=xml_filepath
+        )
 
         return workflow_template
-
-    def parse_workflow(self, xml_filepath):
-        """
-        Parses an XML file to create a new Workflow *instance* with a unique ID and a calculated deadline (in milliseconds).
-        This method is called for each submission in the simulator.
-        """
-        try:
-            tree = ET.parse(xml_filepath)
-            root = tree.getroot()
-        except FileNotFoundError:
-            print(f"Error: XML file not found at {xml_filepath}")
-            return None
-        except ET.ParseError as e:
-            print(f"Error parsing XML file {xml_filepath}: {e}")
-            return None
-
-        filename = os.path.basename(xml_filepath)
-        workflow_name_from_file = os.path.splitext(filename)[0]
-
-        workflow_name_attr = root.attrib.get('name', workflow_name_from_file)
-        if workflow_name_attr == 'test' and 'jobCount' in root.attrib:
-            workflow_name = f"{workflow_name_from_file}_{root.attrib['jobCount']}"
-        else:
-            workflow_name = workflow_name_attr
-
-        current_workflow_instance_id = f"wf_instance_{self.workflow_counter}"
-        self.workflow_counter += 1
-
-        tasks_data = {}
-        for job_elem in root.findall('dax:job', self.namespaces):
-            task_id = job_elem.attrib.get('id')
-            task_name = job_elem.attrib.get('name')
-            # Convert runtime from seconds (XML) to milliseconds
-            runtime = float(job_elem.attrib.get('runtime', 0.0)) * MS_PER_SECOND
-
-            if not task_id:
-                print(f"Warning: Skipping job without 'id' attribute: {ET.tostring(job_elem, encoding='unicode')}")
-                continue
-            if not task_name:
-                task_name = task_id
-
-            if runtime <= 0.0:
-                runtime = 1.0  # Ensure minimum runtime for calculations
-
-            function_name = task_name
-
-            if function_name not in self.functions_catalog:
-                self.functions_catalog[function_name] = Function(function_name, function_name, runtime)
-
-            tasks_data[task_id] = {
-                'id': task_id, 'name': task_name, 'function_id': function_name,
-                'runtime': runtime, 'dependencies': set()
-            }
-
-        if not tasks_data:
-            workflow_instance = Workflow(current_workflow_instance_id, workflow_name, [], 200.0,
-                                         source_filepath=xml_filepath)
-            workflow_instance._compute_critical_path()
-            return workflow_instance
-
-        for child_elem in root.findall('dax:child', self.namespaces):
-            child_id = child_elem.attrib.get('ref')
-            if not child_id or child_id not in tasks_data: continue
-            for parent_elem in child_elem.findall('dax:parent', self.namespaces):
-                parent_id = parent_elem.attrib.get('ref')
-                if not parent_id or parent_id not in tasks_data: continue
-                tasks_data[child_id]['dependencies'].add(parent_id)
-
-        tasks_for_instance = []
-        for task_id, data in tasks_data.items():
-            # Initial task deadline, in ms, based on its converted runtime
-            task_deadline = data['runtime'] * 2.0 + 100.0  # Example: 2x runtime + 100ms buffer
-
-            tasks_for_instance.append(Task(
-                id=data['id'], name=data['name'], function_id=data['function_id'],
-                runtime=data['runtime'], deadline=task_deadline,
-                dependencies=data['dependencies'], workflow_id=current_workflow_instance_id
-            ))
-        tasks_for_instance.sort(key=lambda t: t.id)
-
-        # Create a temporary workflow *just* to get its initial critical path (makespan)
-        # This will compute EST/EFT for tasks (in ms)
-        temp_workflow_for_cpm = Workflow(
-            "temp_cpm_id", workflow_name, list(tasks_for_instance), float('inf')
-        )
-
-        min_workflow_makespan = 0
-        max_depth_of_dag = 0  # Represents roughly max sequential tasks, worst-case for latency
-        for task in temp_workflow_for_cpm.tasks.values():
-            if task.eft > min_workflow_makespan:
-                min_workflow_makespan = task.eft
-
-        # Count the number of tasks to get a rough estimate of DAG depth for latency calculation
-        max_depth_of_dag = len(tasks_for_instance)
-
-        # --- FINAL SUPER-DUPER GENEROUS DEADLINE CALCULATION (CRITICAL) ---
-        # This approach ensures the deadline is extremely forgiving, acknowledging
-        # the severe penalties from CLOUD_TO_EDGE_LATENCY.
-
-        base_makespan = min_workflow_makespan
-
-        # The core problem: many tasks go to cloud. Each such task adds 100 seconds (100,000ms).
-        # Assume a very high percentage of tasks on the critical path *could* go to the cloud.
-        # Let's consider 75% of tasks on the critical path might be cloud-bound, as a very safe upper bound
-        # for deadline calculation.
-        estimated_cloud_latency_impact = (max_depth_of_dag * 0.75) * CLOUD_TO_EDGE_LATENCY
-
-        # Also account for edge-to-edge communication for the remaining tasks
-        estimated_e2e_latency_impact = (max_depth_of_dag * 0.25) * EDGE_TO_EDGE_LATENCY  # For non-cloud tasks
-
-        # Add a cold start penalty for each task
-        estimated_cold_start_impact = max_depth_of_dag * COLD_START_PENALTY
-
-        # Sum up all these potential worst-case delays
-        total_estimated_overheads = estimated_cloud_latency_impact + \
-                                    estimated_e2e_latency_impact + \
-                                    estimated_cold_start_impact
-
-        # Add a massive fixed buffer to account for unpredictable queuing and overall system variability
-        # This should be exceptionally large to guarantee success
-        ABSOLUTE_GUARANTEE_BUFFER_MS = 30.0 * 60.0 * MS_PER_SECOND  # 30 minutes = 1,800,000 ms
-
-        calculated_workflow_deadline = base_makespan + \
-                                       total_estimated_overheads + \
-                                       ABSOLUTE_GUARANTEE_BUFFER_MS
-
-        # Ensure a very high absolute minimum deadline to catch any edge cases
-        # For CyberShake, which has very long tasks, the deadline needs to be hours.
-        MIN_ABSOLUTE_DEADLINE_FLOOR = 60.0 * 60.0 * MS_PER_SECOND  # 1 hour = 3,600,000 ms
-
-        calculated_workflow_deadline = max(calculated_workflow_deadline, MIN_ABSOLUTE_DEADLINE_FLOOR)
-
-        # Create the final workflow instance with its unique ID and calculated deadline
-        workflow_instance = Workflow(
-            current_workflow_instance_id, workflow_name, tasks_for_instance,
-            calculated_workflow_deadline, source_filepath=xml_filepath
-        )
-
-        # The Workflow.__init__ will call _compute_critical_path again with this final deadline,
-        # correctly setting LFTs/LSTs and slack for tasks based on the overall workflow deadline.
-
-        print(f"Parsed Workflow Instance '{workflow_instance.name}' (ID: {workflow_instance.id}):")
-        print(f"  Min Ideal Makespan: {min_workflow_makespan:.2f} ms")
-        print(f"  Estimated DAG Depth (for latency): {max_depth_of_dag}")
-        print(f"  Estimated Cloud Latency Impact: {estimated_cloud_latency_impact:.2f} ms")
-        print(f"  Estimated E2E Latency Impact: {estimated_e2e_latency_impact:.2f} ms")
-        print(f"  Estimated Cold Start Impact: {estimated_cold_start_impact:.2f} ms")
-        print(
-            f"  Calculated Deadline: {calculated_workflow_deadline:.2f} ms ({calculated_workflow_deadline / MS_PER_SECOND / 60.0:.2f} minutes)")
-
-        return workflow_instance
