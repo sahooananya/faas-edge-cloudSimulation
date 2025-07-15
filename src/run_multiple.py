@@ -1,20 +1,16 @@
-# run_multiple.py
-
 from src.simulator import Simulator
 from src.config import (
     NUM_EDGE_NODES, EDGE_CACHE_SIZE_PER_NODE, COLD_START_PENALTY,
     EDGE_TO_EDGE_LATENCY, CLOUD_TO_EDGE_LATENCY, PEGASUS_WORKFLOW_FILEPATHS,
-    ADJACENCY_MATRIX, PUBLIC_CACHE_FRACTION, SCHEDULING_POLICY,
-    SIMULATION_DURATION
+    ADJACENCY_MATRIX, PUBLIC_CACHE_FRACTION,
 )
-# Assuming a 'results' directory with a 'plotting.py' exists for plot generation
 from src.results import plotting
 
 policy_combinations = [
     ("EDF", "full_public"),
     ("EDF", "partial_public_private"),
     ("EDF", "full_private"),
-    ("CriticalPathFirst", "full_public"), # Added CriticalPathFirst policy
+    ("CriticalPathFirst", "full_public"),
     ("CriticalPathFirst", "partial_public_private"),
     ("CriticalPathFirst", "full_private"),
 ]
@@ -39,7 +35,7 @@ for sched_policy, cache_policy in policy_combinations:
 
     simulator.run_simulation()
 
-    # Collect results
+
     comparison_results.append({
         "policy_name": f"{sched_policy}_{cache_policy}",
         "total_workflows_completed": simulator.global_total_workflows_completed,
@@ -52,8 +48,7 @@ for sched_policy, cache_policy in policy_combinations:
         "workflow_stats_list": list(simulator.workflow_stats.values())
     })
 
-# Generate comparison plots
+
 print("\n=== Generating Final Comparison Plots ===")
-# This assumes plotting.py has a function plot_comparison_results that takes the aggregated results
 plotting.plot_comparison_results(comparison_results)
 print("Comparison plots generated in the 'results' directory.")

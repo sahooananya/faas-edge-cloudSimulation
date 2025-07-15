@@ -6,10 +6,10 @@ from .models import EdgeNode
 
 class EdgeNetwork:
     def __init__(self, num_edge_nodes: int, base_latency: float,
-                 adjacency_matrix=None):  # base_latency now represents edge-to-edge
+                 adjacency_matrix=None):
         self.num_edge_nodes = num_edge_nodes
         self.edge_nodes = [EdgeNode(i) for i in range(num_edge_nodes)]
-        self.base_latency = base_latency  # This is the EDGE_TO_EDGE_LATENCY
+        self.base_latency = base_latency
 
         self.graph = nx.Graph()
         self._build_network_graph(num_edge_nodes, adjacency_matrix)
@@ -22,10 +22,8 @@ class EdgeNetwork:
             for i in range(num_edge_nodes):
                 for j in range(i + 1, num_edge_nodes):
                     if adjacency_matrix[i][j] == 1:
-                        # Use self.base_latency (which is EDGE_TO_EDGE_LATENCY) for edge weights
                         self.graph.add_edge(i, j, latency=self.base_latency)
         else:
-            # Fallback to fully connected with default latency if no matrix
             for i in range(num_edge_nodes):
                 for j in range(i + 1, num_edge_nodes):
                     self.graph.add_edge(i, j, latency=self.base_latency)

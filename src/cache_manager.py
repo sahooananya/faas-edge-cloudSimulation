@@ -1,6 +1,5 @@
-import collections
 from collections import OrderedDict
-from typing import Dict, Any, List, Union
+from typing import Dict, List, Union
 
 
 class CacheManager:
@@ -11,12 +10,12 @@ class CacheManager:
         """
         self.cache_size_per_node = cache_size_per_node
         self.num_edge_nodes = num_edge_nodes
-        self.replacement_policy = replacement_policy  # Currently only LRU is implemented/simulated
+        self.replacement_policy = replacement_policy
         self.cache_sharing_policy = cache_sharing_policy
         self.public_cache_fraction = public_cache_fraction
 
-        self.private_caches: Dict[int, OrderedDict] = {}  # For "full_private" and "partial_public_private"
-        self.public_cache: OrderedDict = OrderedDict()  # For "full_public" and "partial_public_private"
+        self.private_caches: Dict[int, OrderedDict] = {}
+        self.public_cache: OrderedDict = OrderedDict()
 
         self._initialize_caches()
 
@@ -34,16 +33,16 @@ class CacheManager:
             if self.private_cache_size_for_partial <= 0 and self.cache_size_per_node > 0:
                 self.private_cache_size_for_partial = 1
         elif self.cache_sharing_policy == "full_private":
-            pass # Each private cache is simply node's cache_size_per_node
+            pass
 
     def _update_lru_cache(self, cache: OrderedDict, key: str, max_size: int):
         """Helper to update LRU cache: move to end (most recently used) or add and pop oldest."""
         if key in cache:
             cache.move_to_end(key)
         else:
-            cache[key] = True  # Value doesn't matter, just key presence
-            if len(cache) >= max_size: # Use >= for strict capacity
-                cache.popitem(last=False)  # Pop the least recently used
+            cache[key] = True
+            if len(cache) >= max_size:
+                cache.popitem(last=False)
 
     def prefetch_functions(self, node_id: int, func_ids: Union[str, List[str]]):
         """
@@ -66,10 +65,8 @@ class CacheManager:
             if node_id in self.private_caches:
                 private_cache = self.private_caches[node_id]
                 for func_id in func_ids_list:
-                    # Try to add to private portion first if space.
                     if func_id not in private_cache and len(private_cache) < self.private_cache_size_for_partial:
-                        private_cache[func_id] = True  # Mark as present, LRU will handle order
-                    # If private is full or function already there, and not in public, try public pool.
+                        private_cache[func_id] = True
                     elif func_id not in self.public_cache:
                         self._update_lru_cache(self.public_cache, func_id, self.public_cache_size)
 
@@ -102,9 +99,6 @@ class CacheManager:
                 elif func_id in self.public_cache:
                     self.public_cache.move_to_end(func_id)
                 else:
-                    # If not in either cache, but just accessed (implies a cold start happened and it's now warm)
-                    # Add it to the private cache if space allows, otherwise public cache.
-                    # This ensures it's now tracked as warm.
                     if len(private_cache) < self.private_cache_size_for_partial:
                         self._update_lru_cache(private_cache, func_id, self.private_cache_size_for_partial)
                     elif len(self.public_cache) < self.public_cache_size:

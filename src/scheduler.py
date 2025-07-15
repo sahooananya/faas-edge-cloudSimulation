@@ -6,7 +6,7 @@ import random
 from .models import Task, EdgeNode, Cloud, Workflow, WorkflowStats  # Import WorkflowStats
 from .cache_manager import CacheManager
 from .edge_network import EdgeNetwork
-from .config import  NUM_EDGE_NODES
+from .config import COLD_START_PENALTY, NUM_EDGE_NODES
 
 
 class Scheduler:
@@ -149,6 +149,8 @@ class Scheduler:
         for func_id in functions_to_prefetch:
             target_node_id = random.randint(0, NUM_EDGE_NODES - 1)
             self.cache_manager.prefetch_functions(target_node_id, [func_id])
+
+            # FIX: Changed method signature to accept 'current_time'
 
     def predictive_prefetch(self, active_workflows_stats: Dict[str, 'WorkflowStats'], current_time: float):
         """

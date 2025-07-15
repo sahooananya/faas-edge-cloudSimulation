@@ -24,20 +24,20 @@ class Task:
         self.name = name
         self.function_id = function_id
         self.runtime = runtime
-        self.deadline = deadline  # Absolute deadline for this task in the workflow context
-        self.dependencies = set(dependencies)  # IDs of tasks this task depends on (copy to ensure independence)
+        self.deadline = deadline
+        self.dependencies = set(dependencies)
 
-        # Execution related attributes
-        self.ready_time = None  # Time when task becomes ready for scheduling
-        self.start_time = None  # Actual start time of execution on a node
-        self.end_time = None  # Actual end time of execution on a node
-        self.assigned_node: Optional['EdgeNode' | 'Cloud'] = None  # Reference to the EdgeNode or Cloud object
-        self.assigned_node_type: Optional[str] = None  # "edge" or "cloud"
-        self.cold_start_penalty = 0.0  # Cold start penalty incurred if any
-        self.wait_time = 0.0  # Time spent waiting in queue on the node
-        self.on_critical_path = False  # Determined during workflow parsing/analysis
-        self.workflow_id = workflow_id  # The ID of the workflow instance this task belongs to
-        self.workflow_instance: Optional['Workflow'] = None  # Reference to the parent workflow instance
+
+        self.ready_time = None
+        self.start_time = None
+        self.end_time = None
+        self.assigned_node: Optional['EdgeNode' | 'Cloud'] = None
+        self.assigned_node_type: Optional[str] = None
+        self.cold_start_penalty = 0.0
+        self.wait_time = 0.0
+        self.on_critical_path = False
+        self.workflow_id = workflow_id
+        self.workflow_instance: Optional['Workflow'] = None
 
 
 class EdgeNode:
@@ -47,35 +47,28 @@ class EdgeNode:
 
     def __init__(self, id, capacity: int = 1, cache_size: int = 5):
         self.id = id
-        self.capacity = capacity  # Number of concurrent tasks it can execute
-        # Stores the finish time of tasks occupying each slot. When a task finishes, its slot is free.
-        self.occupied_slots_finish_times: List[float] = []  # Stores end_time for each occupied slot
+        self.capacity = capacity
+        self.occupied_slots_finish_times: List[float] = []
 
-        # Cache for functions {function_id: True} - True indicates presence, OrderedDict for LRU
         self.function_cache: collections.OrderedDict[str, bool] = collections.OrderedDict()
-        self.cache_size = cache_size  # Max number of functions to keep warm in its local cache
+        self.cache_size = cache_size
 
     def get_earliest_available_slot_time(self, current_simulation_time: float) -> float:
         """
         Returns the earliest time a slot becomes available on this node.
         This also implicitly cleans up `occupied_slots_finish_times`.
         """
-        # Purge completed tasks from occupied slots
         self.occupied_slots_finish_times = [
             t_end for t_end in self.occupied_slots_finish_times if t_end > current_simulation_time
         ]
 
         if len(self.occupied_slots_finish_times) < self.capacity:
-            # If there's an empty slot, it's available right now (from current_simulation_time)
             return current_simulation_time
         else:
-            # All slots are busy, return the earliest time one of them finishes
-            # We assume it's sorted or find the min. It's better to keep it sorted.
             return min(self.occupied_slots_finish_times)
 
     def get_current_load(self, current_simulation_time: float) -> int:
         """Returns the number of functions currently being executed (occupying slots)."""
-        # Ensure `occupied_slots_finish_times` is up-to-date with respect to current_simulation_time
         self.occupied_slots_finish_times = [
             t_end for t_end in self.occupied_slots_finish_times if t_end > current_simulation_time
         ]
@@ -91,18 +84,15 @@ class EdgeNode:
         This method is called by the scheduler AFTER it has determined start/end times.
         It manages the node's internal state regarding occupied slots and function cache.
         """
-        # Add the task's end time to mark a slot as occupied until then
         self.occupied_slots_finish_times.append(task_end_time)
-        # Keep it sorted to easily find the next available slot time
         self.occupied_slots_finish_times.sort()
 
-        # Update the function cache (LRU logic)
         if function_id in self.function_cache:
-            self.function_cache.move_to_end(function_id)  # Mark as most recently used
+            self.function_cache.move_to_end(function_id)
         else:
             if len(self.function_cache) >= self.cache_size:
-                self.function_cache.popitem(last=False)  # Evict LRU item
-            self.function_cache[function_id] = True  # Add new function to cache
+                self.function_cache.popitem(last=False)
+            self.function_cache[function_id] = True
 
     def is_cached(self, function_id: str) -> bool:
         """Checks if a function is currently in the node's local cache."""
@@ -117,8 +107,7 @@ class Cloud:
 
     def __init__(self, base_latency: float):
         self.id = "cloud"
-        self.base_latency = base_latency  # Latency for communicating with cloud
-        # In this simplified model, the cloud is always ready to receive new tasks.
+        self.base_latency = base_latency
         pass
 
     def get_available_time(self, current_simulation_time: float) -> float:
@@ -145,15 +134,14 @@ class Workflow:
                  source_filepath: str = "", workflow_submission_time: float = 0.0):
         self.id = id
         self.name = name
-        self.tasks = tasks  # This should already be a Dict[str, Task] from the parser
+        self.tasks = tasks
         self.total_tasks = len(self.tasks)
-        self.initial_deadline = initial_deadline  # Overall deadline for the entire workflow
+        self.initial_deadline = initial_deadline
         self.source_filepath = source_filepath
 
-        # Execution specific attributes (to be reset for each instance)
         self.completed_tasks: Set[str] = set()
-        self.start_time: Optional[float] = None  # When the first task of this workflow starts
-        self.end_time: Optional[float] = None  # When the last task of this workflow completes
+        self.start_time: Optional[float] = None
+        self.end_time: Optional[float] = None
         self.workflow_submission_time = workflow_submission_time
 
         # Build dependency graph
@@ -263,9 +251,9 @@ class Workflow:
                 name=task.name,
                 function_id=task.function_id,
                 runtime=task.runtime,
-                deadline=task.deadline,  # Deadline from template; instance submission time handles absolute
-                dependencies=set(task.dependencies),  # Ensure dependencies are copied
-                workflow_id=new_id  # Link to the new workflow instance ID
+                deadline=task.deadline,
+                dependencies=set(task.dependencies),
+                workflow_id=new_id
             )
             new_task.on_critical_path = task.on_critical_path
             new_tasks[task_id] = new_task
@@ -299,9 +287,9 @@ class WorkflowStats:
         self.tasks_executed_on_cloud = 0
         self.cold_starts = 0
         self.total_wait_time = 0.0
-        self.tasks_completed_within_deadline = 0  # Individual task deadlines
-        self.workflow_completed_within_deadline = False  # Overall workflow deadline
-        self.task_execution_details = []  # To store details for average wait time calculation
+        self.tasks_completed_within_deadline = 0
+        self.workflow_completed_within_deadline = False
+        self.task_execution_details = []
 
     def add_task_execution_detail(self, node_type: str, completed_on_time: bool, wait_time: float,
                                   cold_start_incurred: float):

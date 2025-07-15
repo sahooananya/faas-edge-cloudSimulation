@@ -4,10 +4,21 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="21757a6c-68d3-4887-8a5b-3941046bff0d" name="Changes" comment="completed">
+    <list default="true" id="21757a6c-68d3-4887-8a5b-3941046bff0d" name="Changes" comment="final">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/average_edge_utilization.png" beforeDir="false" afterPath="$PROJECT_DIR$/results/average_edge_utilization.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/per_workflow_stats.csv" beforeDir="false" afterPath="$PROJECT_DIR$/results/per_workflow_stats.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/simulation_summary.csv" beforeDir="false" afterPath="$PROJECT_DIR$/results/simulation_summary.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/tasks_on_edge_vs_cloud.png" beforeDir="false" afterPath="$PROJECT_DIR$/results/tasks_on_edge_vs_cloud.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/total_cold_starts.png" beforeDir="false" afterPath="$PROJECT_DIR$/results/total_cold_starts.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/total_workflows_completed.png" beforeDir="false" afterPath="$PROJECT_DIR$/results/total_workflows_completed.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/workflows_completed_on_time.png" beforeDir="false" afterPath="$PROJECT_DIR$/results/workflows_completed_on_time.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cache_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/cache_manager.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/edge_network.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/edge_network.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/results/plotting.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/results/plotting.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/run_multiple.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/run_multiple.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/scheduler.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/simulator.py" afterDir="false" />
@@ -38,18 +49,18 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;Python.simulator.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.simulator.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "master",
+    "settings.editor.selected.configurable": "settings.sync"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="C:\Users\KIIT\PycharmProjects\faas-edge-cloud-sim\src new" />
@@ -102,7 +113,15 @@
       <option name="project" value="LOCAL" />
       <updated>1750058399333</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="final">
+      <option name="closed" value="true" />
+      <created>1750095434733</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1750095434733</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -119,7 +138,8 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="phase 1 completed" />
     <MESSAGE value="completed" />
-    <option name="LAST_COMMIT_MESSAGE" value="completed" />
+    <MESSAGE value="final" />
+    <option name="LAST_COMMIT_MESSAGE" value="final" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
