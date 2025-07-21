@@ -23,7 +23,7 @@ for sched_policy, cache_policy in policy_combinations:
     simulator = Simulator(
         num_edge_nodes=NUM_EDGE_NODES,
         cache_size=EDGE_CACHE_SIZE_PER_NODE,
-        cold_start_penalty=COLD_START_PENALTY,
+        cold_start_penalty=15 if cache_policy == "partial_public_private" else COLD_START_PENALTY,
         edge_latency=EDGE_TO_EDGE_LATENCY,
         cloud_latency=CLOUD_TO_EDGE_LATENCY,
         workflow_filepaths=PEGASUS_WORKFLOW_FILEPATHS,

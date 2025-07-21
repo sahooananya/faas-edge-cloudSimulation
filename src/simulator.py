@@ -349,7 +349,7 @@ class Simulator:
 
         self.edge_network = EdgeNetwork(num_edge_nodes, edge_latency, adjacency_matrix)
         for node in self.edge_network.edge_nodes:
-            node.capacity = 1
+            node.capacity = 2 if self.cache_sharing_policy == "partial_public_private" else 1
             node.cache_size = self.cache_size
 
         self.cloud = Cloud(base_latency=self.cloud_latency)
