@@ -4,22 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="21757a6c-68d3-4887-8a5b-3941046bff0d" name="Changes" comment="done">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/comparison_cold_starts.png" beforeDir="false" afterPath="$PROJECT_DIR$/results/comparison_cold_starts.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/comparison_edge_utilization.png" beforeDir="false" afterPath="$PROJECT_DIR$/results/comparison_edge_utilization.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/comparison_task_execution_ratio.png" beforeDir="false" afterPath="$PROJECT_DIR$/results/comparison_task_execution_ratio.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/comparison_workflows_on_time.png" beforeDir="false" afterPath="$PROJECT_DIR$/results/comparison_workflows_on_time.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/edge_request_heatmap_CriticalPathFirst_partial_public_private.png" beforeDir="false" afterPath="$PROJECT_DIR$/results/edge_request_heatmap_CriticalPathFirst_partial_public_private.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/edge_request_heatmap_EDF_partial_public_private.png" beforeDir="false" afterPath="$PROJECT_DIR$/results/edge_request_heatmap_EDF_partial_public_private.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/per_workflow_stats.csv" beforeDir="false" afterPath="$PROJECT_DIR$/results/per_workflow_stats.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/simulation_summary.csv" beforeDir="false" afterPath="$PROJECT_DIR$/results/simulation_summary.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cache_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/cache_manager.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/results/plotting.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/results/plotting.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/run_multiple.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/run_multiple.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/scheduler.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/simulator.py" afterDir="false" />
-    </list>
+    <list default="true" id="21757a6c-68d3-4887-8a5b-3941046bff0d" name="Changes" comment="final" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -134,7 +119,15 @@
       <option name="project" value="LOCAL" />
       <updated>1752563890974</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="final">
+      <option name="closed" value="true" />
+      <created>1753109897515</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1753109897515</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -151,10 +144,10 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="phase 1 completed" />
     <MESSAGE value="completed" />
-    <MESSAGE value="final" />
     <MESSAGE value="initial stage done" />
     <MESSAGE value="done" />
-    <option name="LAST_COMMIT_MESSAGE" value="done" />
+    <MESSAGE value="final" />
+    <option name="LAST_COMMIT_MESSAGE" value="final" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
