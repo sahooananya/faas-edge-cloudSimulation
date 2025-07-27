@@ -43,7 +43,7 @@ This tool is especially tailored for researchers and PhD students exploring:
 
 faas-edge-cloudSimulation/
 │
-├── main.py                      # Entry script (can be extended)
+├── main.py                      # NA
 ├── requirements.txt             # Python dependencies
 ├── README.md                    # Project documentation
 │
