@@ -72,7 +72,7 @@ faas-edge-cloudSimulation/
 ### 💻 Setup
 
 ```bash
-git clone https://github.com/your-username/faas-edge-cloudSimulation.git
+git clone https://github.com/sahooananya/faas-edge-cloudSimulation.git
 cd faas-edge-cloudSimulation
 pip install -r requirements.txt
 ````
