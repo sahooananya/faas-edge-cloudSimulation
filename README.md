@@ -1,6 +1,11 @@
-# FaaS Edge-Cloud Simulator
+# ⚡ FaaS Edge-Cloud Simulator
 
-## Overview
+> 🎓 **Developed as part of my Summer Internship 2025 at IIT Guwahati**  
+> This project simulates Function-as-a-Service (FaaS) deployments across edge-cloud environments and was built under the guidance of research mentors at IIT Guwahati.
+
+---
+
+## 🧠 Overview
 
 This project is a **Discrete Event Simulator** for modeling and analyzing **Function-as-a-Service (FaaS)** deployments across a **heterogeneous Edge-Cloud continuum**. It enables researchers to simulate serverless function scheduling, caching strategies, and network dynamics under various configurations. The simulator is designed to support both theoretical exploration and practical experimentation in **edge computing, cloud offloading, and resource orchestration**.
 
@@ -13,7 +18,7 @@ This tool is especially tailored for researchers and PhD students exploring:
 
 ---
 
-## Features
+## 🚀 Features
 
 ### ✅ Core Simulation Framework
 
@@ -37,13 +42,13 @@ This tool is especially tailored for researchers and PhD students exploring:
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 
 faas-edge-cloudSimulation/
 │
-├── main.py                      # NA
+├── main.py                      # (optional main launcher)
 ├── requirements.txt             # Python dependencies
 ├── README.md                    # Project documentation
 │
@@ -62,7 +67,7 @@ faas-edge-cloudSimulation/
 
 ---
 
-## Installation
+## 🛠️ Installation
 
 ### 🔧 Prerequisites
 
@@ -79,7 +84,7 @@ pip install -r requirements.txt
 
 ---
 
-## Usage
+## 🚦 Usage
 
 ### 🔁 Run a Single Simulation
 
@@ -102,7 +107,7 @@ This will automatically evaluate:
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
 All simulation parameters are in `src/config.py`:
 
@@ -118,66 +123,65 @@ Modify these to match your experiment's scale and policy choice.
 
 ---
 
-## Input Format
+## 📥 Input Format
 
 Workflows must be in [Pegasus DAX XML](https://pegasus.isi.edu/documentation/) format.
-Sample files and generator tools can be added for convenience.
+Sample files and workflow generators can be added for testing purposes.
 
 ---
 
-## Output
+## 📤 Output
 
-After simulation:
+After each simulation run, the following are generated:
 
 * Task status logs
-* Edge/Cloud utilization
-* Deadline hit/miss stats
-* Graphs saved in `results/`
+* Edge/Cloud resource utilization
+* Deadline statistics (met/missed)
+* Plots saved in `results/`
 
 Sample Plots:
 
 * Deadline miss comparison
-* Edge utilization %
-* Cache hit rates (if enabled)
+* Edge node utilization %
+* Cache hit ratios
 
 ---
 
-## Research Applications
+## 📚 Research Applications
 
-This simulator supports exploration in:
+This simulator is designed to support research in:
 
-* **Adaptive edge-cloud scheduling**
-* **Predictive and cooperative caching**
-* **Latency-constrained computing**
-* **Edge-aware scientific workflow execution**
-* **Energy-aware offloading strategies**
+* **Edge-cloud hybrid orchestration**
+* **Latency-sensitive task scheduling**
+* **Energy-efficient offloading**
+* **Intelligent function caching**
+* **Scientific workflow execution at the edge**
 
-You may extend modules to:
+You can extend it to:
 
-* Integrate real network latency traces
-* Add reinforcement learning-based policies
-* Simulate heterogeneous edge nodes
+* Include real-world latency traces
+* Integrate ML-based scheduling (e.g., RL)
+* Simulate heterogeneous node capabilities
 
 ---
 
-## Citation & Credits
+## 📜 Citation & Credits
 
-If used in a research paper, please credit:
+If you use this simulator in your research, please cite:
 
 ```
 Ananya Sahoo, "FaaS Edge-Cloud Simulation Framework", 2025.
+Developed as part of IIT Guwahati Summer Internship Program, Dept. of Computer Science & Engineering.
 ```
-
-Due acknowledgment will be appreciated. This work is open to collaborative research and improvement.
 
 ---
 
-## Contact
-
-For collaboration or queries, feel free to reach out to:
+## 📬 Contact
 
 **Ananya Sahoo**
 B.Tech, Computer Science
 KIIT University
-📧 [sahooananya036@gmail.com](mailto:sahooananya036@gmail.com) 
+📧 [sahooananya036@gmail.com](mailto:sahooananya036@gmail.com)
+🔗 [GitHub Profile](https://github.com/sahooananya)
 
+---
